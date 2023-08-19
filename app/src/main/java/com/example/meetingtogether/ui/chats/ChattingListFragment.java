@@ -10,15 +10,15 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.example.meetingtogether.databinding.FragmentDashboardBinding;
+import com.example.meetingtogether.databinding.FragmentChattinglistBinding;
 
 public class ChattingListFragment extends Fragment {
 
-    private FragmentDashboardBinding binding;
+    private FragmentChattinglistBinding binding;
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
-        binding = FragmentDashboardBinding.inflate(inflater, container, false);
+        binding = FragmentChattinglistBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
         return root;

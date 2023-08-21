@@ -16,15 +16,20 @@ public class MyApplication extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
-        try {
-            mSocket = IO.socket(Constants.CHAT_SERVER_URL);
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            mSocket = IO.socket(Constants.CHAT_SERVER_URL);
+//        } catch (URISyntaxException e) {
+//            throw new RuntimeException(e);
+//        }
     }
 
     public Socket getSocket() {
-        return mSocket;
+        try {
+            if(mSocket == null) mSocket = IO.socket(Constants.CHAT_SERVER_URL);
+            return mSocket;
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

@@ -2,6 +2,7 @@ package com.example.meetingtogether.ui.meetings;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -11,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 public class PublicFragment extends Fragment {
 
@@ -88,12 +91,15 @@ public class PublicFragment extends Fragment {
         commonRecyclerView.setOnItemClickListener(new CommonRecyclerView.OnItemClickInterface() {
             @Override
             public void onItemClickListener(View view, int position) {
-                int room = Integer.parseInt(dataList.get(position).get("room").toString());
+//                int room = Integer.parseInt(dataList.get(position).get("room").toString());
+                String roomId = dataList.get(position).get("room").toString();
 
                 Intent intent = new Intent(getActivity(), MeetingRoomActivity.class);
-                intent.putExtra("room", room);
-                getActivity().startActivity(intent);
+                intent.putExtra("roomId", roomId);
 
+//                MeetingListFragment meetingListFragment = (MeetingListFragment) getParentFragment();
+//                meetingListFragment.enterRoom(roomId);
+                getActivity().startActivity(intent);
             }
             @Override
             public void onItemLongClickListener(View view, int position) {
@@ -118,4 +124,6 @@ public class PublicFragment extends Fragment {
         super.onDestroy();
         binding = null;
     }
+
+
 }

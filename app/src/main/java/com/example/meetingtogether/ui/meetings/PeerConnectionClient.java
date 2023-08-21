@@ -17,6 +17,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
 import org.webrtc.CameraVideoCapturer;
@@ -89,7 +90,8 @@ public class PeerConnectionClient {
   public static final String VIDEO_TRACK_ID = "ARDAMSv0";
   public static final String AUDIO_TRACK_ID = "ARDAMSa0";
   public static final String VIDEO_TRACK_TYPE = "video";
-  private static final String TAG = "PCRTCClient";
+  private static final String TAG = "TEST";
+//  private static final String TAG = "PCRTCClient";
   private static final String VIDEO_CODEC_VP8 = "VP8";
   private static final String VIDEO_CODEC_VP9 = "VP9";
   private static final String VIDEO_CODEC_H264 = "H264";
@@ -320,7 +322,7 @@ public class PeerConnectionClient {
    * ownership of `eglBase`.
    */
   public PeerConnectionClient(Context appContext, EglBase eglBase,
-      PeerConnectionParameters peerConnectionParameters, PeerConnectionEvents events) {
+                              PeerConnectionParameters peerConnectionParameters, PeerConnectionEvents events) {
     this.rootEglBase = eglBase;
     this.appContext = appContext;
     this.events = events;
@@ -373,6 +375,7 @@ public class PeerConnectionClient {
       try {
         createMediaConstraintsInternal();
         createPeerConnectionInternal();
+        maybeCreateAndStartRtcEventLog();
       } catch (Exception e) {
         reportError("Failed to create peer connection: " + e.getMessage());
         throw e;
@@ -400,6 +403,22 @@ public class PeerConnectionClient {
     // Check if ISAC is used by default.
     preferIsac = peerConnectionParameters.audioCodec != null
         && peerConnectionParameters.audioCodec.equals(AUDIO_CODEC_ISAC);
+
+    // It is possible to save a copy in raw PCM format on a file by checking
+    // the "Save input audio to file" checkbox in the Settings UI. A callback
+    // interface is set when this flag is enabled. As a result, a copy of recorded
+    // audio samples are provided to this client directly from the native audio
+    // layer in Java.
+    if (peerConnectionParameters.saveInputAudioToFile) {
+      if (!peerConnectionParameters.useOpenSLES) {
+        Log.d(TAG, "Enable recording of microphone input audio to file");
+//        saveRecordedAudioToFile = new RecordedAudioToFileController(executor);
+      } else {
+        // TODO(henrika): ensure that the UI reflects that if OpenSL ES is selected,
+        // then the "Save inut audio to file" option shall be grayed out.
+        Log.e(TAG, "Recording of input audio is not supported for OpenSL ES");
+      }
+    }
 
     final AudioDeviceModule adm = createJavaAudioDevice();
 
@@ -512,6 +531,7 @@ public class PeerConnectionClient {
     };
 
     return JavaAudioDeviceModule.builder(appContext)
+//        .setSamplesReadyCallback(saveRecordedAudioToFile)
         .setUseHardwareAcousticEchoCanceler(!peerConnectionParameters.disableBuiltInAEC)
         .setUseHardwareNoiseSuppressor(!peerConnectionParameters.disableBuiltInNS)
         .setAudioRecordErrorCallback(audioRecordErrorCallback)
@@ -572,8 +592,17 @@ public class PeerConnectionClient {
 
     queuedRemoteCandidates = new ArrayList<>();
 
+    ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
+    String URL = "turn:webrtc-sfu.kro.kr";
+    String userName = "song";
+    String password = "Alshalsh92@";
+    iceServers.add(new PeerConnection.IceServer(URL, userName, password));
     PeerConnection.RTCConfiguration rtcConfig =
-        new PeerConnection.RTCConfiguration(signalingParameters.iceServers);
+        new PeerConnection.RTCConfiguration(iceServers);
+
+//    PeerConnection.RTCConfiguration rtcConfig =
+//            new PeerConnection.RTCConfiguration(signalingParameters.iceServers);
+
     // TCP candidates are only useful when connecting to a server that supports
     // ICE-TCP.
     rtcConfig.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED;
@@ -631,6 +660,11 @@ public class PeerConnectionClient {
       }
     }
 
+//    if (saveRecordedAudioToFile != null) {
+//      if (saveRecordedAudioToFile.start()) {
+//        Log.d(TAG, "Recording input audio to file is activated");
+//      }
+//    }
     Log.d(TAG, "Peer connection created.");
   }
 
@@ -640,6 +674,18 @@ public class PeerConnectionClient {
     final String outputFileName = "event_log_" + dateFormat.format(date) + ".log";
     return new File(
         appContext.getDir(RTCEVENTLOG_OUTPUT_DIR_NAME, Context.MODE_PRIVATE), outputFileName);
+  }
+
+  private void maybeCreateAndStartRtcEventLog() {
+    if (appContext == null || peerConnection == null) {
+      return;
+    }
+    if (!peerConnectionParameters.enableRtcEventLog) {
+      Log.d(TAG, "RtcEventLog is disabled.");
+      return;
+    }
+//    rtcEventLog = new RtcEventLog(peerConnection);
+//    rtcEventLog.start(createRtcEventLogOutputFile());
   }
 
   private void closeInternal() {
@@ -652,6 +698,11 @@ public class PeerConnectionClient {
       dataChannel.dispose();
       dataChannel = null;
     }
+//    if (rtcEventLog != null) {
+//      // RtcEventLog should stop before the peer connection is disposed.
+//      rtcEventLog.stop();
+//      rtcEventLog = null;
+//    }
     if (peerConnection != null) {
       peerConnection.dispose();
       peerConnection = null;
@@ -681,6 +732,11 @@ public class PeerConnectionClient {
       surfaceTextureHelper.dispose();
       surfaceTextureHelper = null;
     }
+//    if (saveRecordedAudioToFile != null) {
+//      Log.d(TAG, "Closing audio file for recorded input audio.");
+//      saveRecordedAudioToFile.stop();
+//      saveRecordedAudioToFile = null;
+//    }
     localRender = null;
     remoteSinks = null;
     Log.d(TAG, "Closing peer connection factory.");
@@ -1163,7 +1219,7 @@ public class PeerConnectionClient {
     }
 
     @Override
-    public void onIceConnectionChange(final PeerConnection.IceConnectionState newState) {
+    public void onIceConnectionChange(final IceConnectionState newState) {
       executor.execute(() -> {
         Log.d(TAG, "IceConnectionState: " + newState);
         if (newState == IceConnectionState.CONNECTED) {
@@ -1177,7 +1233,7 @@ public class PeerConnectionClient {
     }
 
     @Override
-    public void onConnectionChange(final PeerConnection.PeerConnectionState newState) {
+    public void onConnectionChange(final PeerConnectionState newState) {
       executor.execute(() -> {
         Log.d(TAG, "PeerConnectionState: " + newState);
         if (newState == PeerConnectionState.CONNECTED) {

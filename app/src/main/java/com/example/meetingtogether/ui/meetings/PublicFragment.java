@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
+import android.telecom.Call;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -22,6 +23,8 @@ import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.CommonRecyclerView;
 import com.example.meetingtogether.databinding.FragmentPublicBinding;
 import com.example.meetingtogether.databinding.PlainRowItemBinding;
+import com.example.meetingtogether.ui.meetings.google.CallActivity;
+import com.example.meetingtogether.ui.meetings.google.ConnectActivity;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -94,12 +97,13 @@ public class PublicFragment extends Fragment {
 //                int room = Integer.parseInt(dataList.get(position).get("room").toString());
                 String roomId = dataList.get(position).get("room").toString();
 
-                Intent intent = new Intent(getActivity(), MeetingRoomActivity.class);
-                intent.putExtra("roomId", roomId);
+//                Intent intent = new Intent(getActivity(), MeetingRoomActivity.class);
+//                Intent intent = new Intent(getActivity(), ConnectActivity.class);
+//                intent.putExtra("roomId", roomId);
 
-//                MeetingListFragment meetingListFragment = (MeetingListFragment) getParentFragment();
-//                meetingListFragment.enterRoom(roomId);
-                getActivity().startActivity(intent);
+                MeetingListFragment meetingListFragment = (MeetingListFragment) getParentFragment();
+                meetingListFragment.connectToRoom(roomId, false, false, false, 0);
+//                getActivity().startActivity(intent);
             }
             @Override
             public void onItemLongClickListener(View view, int position) {

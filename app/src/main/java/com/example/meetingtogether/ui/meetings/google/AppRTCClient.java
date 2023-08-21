@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-package com.example.meetingtogether.ui.meetings;
+package com.example.meetingtogether.ui.meetings.google;
 
 import org.webrtc.IceCandidate;
 import org.webrtc.PeerConnection;

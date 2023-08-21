@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-package com.example.meetingtogether.ui.meetings;
+package com.example.meetingtogether.ui.meetings.google;
 
 import android.content.Context;
 import android.os.Environment;
@@ -17,6 +17,8 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+
+import com.example.meetingtogether.ui.meetings.google.AppRTCClient;
 
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;

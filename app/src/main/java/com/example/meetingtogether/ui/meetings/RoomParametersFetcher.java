@@ -12,7 +12,8 @@ package com.example.meetingtogether.ui.meetings;
 
 import android.util.Log;
 
-import com.example.meetingtogether.common.AsyncHttpURLConnection;
+import com.example.meetingtogether.ui.meetings.google.AppRTCClient;
+import com.example.meetingtogether.ui.meetings.google.util.AsyncHttpURLConnection;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -33,7 +34,7 @@ import java.util.Scanner;
  * 해당 room을 이용하기 위해서 AppRTC room URL을 시그널링 파라미터 세트로 변화시키는 AsyncTask
  */
 public class RoomParametersFetcher {
-  private static final String TAG = "RoomRTCClient";
+  private static final String TAG = "TEST";
   private static final int TURN_HTTP_TIMEOUT_MS = 5000;
   private final RoomParametersFetcherEvents events;
   private final String roomUrl;

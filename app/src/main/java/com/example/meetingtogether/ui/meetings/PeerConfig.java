@@ -1,6 +1,31 @@
 package com.example.meetingtogether.ui.meetings;
 
+import org.webrtc.Logging;
+import org.webrtc.VideoFrame;
+import org.webrtc.VideoSink;
+
 public class PeerConfig {
+
+    /**
+     * 비디오 싱크는 비디오 데이터를 받아 화면에 표시하는 역할을 하며
+     */
+    private static class ProxyVideoSink implements VideoSink {
+        private VideoSink target;
+
+        @Override
+        synchronized public void onFrame(VideoFrame frame) {
+            if (target == null) {
+                Logging.d(TAG, "Dropping frame in proxy because target is null.");
+                return;
+            }
+
+            target.onFrame(frame);
+        }
+
+        synchronized public void setTarget(VideoSink target) {
+            this.target = target;
+        }
+    }
 
     public static final String EXTRA_ROOMID = " com.example.meetingtogether.ROOMID";
     public static final String EXTRA_URLPARAMETERS = " com.example.meetingtogether.URLPARAMETERS";

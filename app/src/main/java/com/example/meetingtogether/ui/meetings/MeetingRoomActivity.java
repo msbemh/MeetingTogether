@@ -30,20 +30,50 @@ import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_FPS
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_HEIGHT;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_WIDTH;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.VIDEO_CODEC_H264_HIGH;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.CAPTURE_PERMISSION_REQUEST_CODE;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CAMERA2;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CAPTURETOTEXTURE_ENABLED;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CMDLINE;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_ROOMID;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_RUNTIME;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SCREENCAPTURE;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_URLPARAMETERS;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_VIDEO_FILE_AS_CAMERA;
+import static com.example.meetingtogether.ui.meetings.google.CallActivity.STAT_CALLBACK_PERIOD;
 
 import android.Manifest;
 import android.annotation.TargetApi;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.FragmentTransaction;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
-import com.example.meetingtogether.MyApplication;
+import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.Constants;
 import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
-import com.google.android.material.snackbar.Snackbar;
+
+import com.example.meetingtogether.ui.meetings.google.AppRTCAudioManager;
+import com.example.meetingtogether.ui.meetings.google.AppRTCClient;
+import com.example.meetingtogether.ui.meetings.google.CallActivity;
+import com.example.meetingtogether.ui.meetings.google.CallFragment;
+import com.example.meetingtogether.ui.meetings.google.CpuMonitor;
+import com.example.meetingtogether.ui.meetings.google.DirectRTCClient;
+import com.example.meetingtogether.ui.meetings.google.HudFragment;
+import com.example.meetingtogether.ui.meetings.google.PeerConnectionClient;
+import com.example.meetingtogether.ui.meetings.google.WebSocketRTCClient;
 
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -52,34 +82,35 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Environment;
+import android.os.Handler;
 import android.preference.PreferenceManager;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
-import androidx.navigation.ui.AppBarConfiguration;
-import androidx.navigation.ui.NavigationUI;
 
-import com.example.meetingtogether.R;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
+import org.webrtc.Camera1Enumerator;
 import org.webrtc.Camera2Enumerator;
 import org.webrtc.CameraEnumerator;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
+import org.webrtc.FileVideoCapturer;
 import org.webrtc.IceCandidate;
 import org.webrtc.Logging;
 import org.webrtc.MediaConstraints;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RTCStatsReport;
 import org.webrtc.RendererCommon;
+import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.SessionDescription;
 import org.webrtc.SoftwareVideoDecoderFactory;
 import org.webrtc.SoftwareVideoEncoderFactory;
@@ -88,44 +119,64 @@ import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoDecoderFactory;
 import org.webrtc.VideoEncoderFactory;
+import org.webrtc.VideoFileRenderer;
+import org.webrtc.VideoFrame;
+import org.webrtc.VideoSink;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 import org.webrtc.audio.AudioDeviceModule;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import io.socket.client.IO;
 import io.socket.client.Socket;
 import io.socket.emitter.Emitter;
 
 public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClient.SignalingEvents,
-        PeerConnectionClient.PeerConnectionEvents{
+        PeerConnectionClient.PeerConnectionEvents,
+        CallFragment.OnCallEvents {
     private static final String TAG = "TEST";
+
+    /**
+     * 비디오 싱크는 비디오 데이터를 받아 화면에 표시하는 역할을 하며
+     */
+    private static class ProxyVideoSink implements VideoSink {
+        private VideoSink target;
+
+        @Override
+        synchronized public void onFrame(VideoFrame frame) {
+            if (target == null) {
+                Logging.d(TAG, "Dropping frame in proxy because target is null.");
+                return;
+            }
+
+            target.onFrame(frame);
+        }
+
+        synchronized public void setTarget(VideoSink target) {
+            this.target = target;
+        }
+    }
+
     private ActivityMeetingRoomBinding binding;
 
     private Socket mSocket;
 
     private String roomId;
 
-    @Nullable
-    private SurfaceViewRenderer fullscreenRenderer;
-
     private List<UserModel> userModelList = new ArrayList<>();
 
     private static final int CONNECTION_REQUEST = 1;
     private static final int PERMISSION_REQUEST = 2;
     private static final int REMOVE_FAVORITE_INDEX = 0;
-
-    @Nullable private PeerConnectionClient peerConnectionClient;
-
-    @Nullable
-    private PeerConnectionClient.PeerConnectionParameters peerConnectionParameters;
 
     private boolean preferIsac;
 
@@ -149,20 +200,47 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     @Nullable
     private AudioTrack localAudioTrack;
 
-    private SharedPreferences sharedPref;
-    private String keyprefResolution;
-    private String keyprefFps;
-    private String keyprefVideoBitrateType;
-    private String keyprefVideoBitrateValue;
-    private String keyprefAudioBitrateType;
-    private String keyprefAudioBitrateValue;
-    private String keyprefRoomServerUrl;
-    private String keyprefRoom;
-    private String keyprefRoomList;
-
-    private Intent receiveIntent;
+    private Intent intent;
 
     private VideoCapturer videoCapturer;
+
+    /**
+     * 필요한  변수
+     */
+    private final ProxyVideoSink remoteProxyRenderer = new ProxyVideoSink();
+    private final ProxyVideoSink localProxyVideoSink = new ProxyVideoSink();
+    @Nullable private PeerConnectionClient peerConnectionClient;
+    @Nullable
+    private AppRTCClient appRtcClient;
+    @Nullable
+    private AppRTCClient.SignalingParameters signalingParameters;
+    @Nullable private AppRTCAudioManager audioManager;
+    @Nullable
+    private SurfaceViewRenderer pipRenderer;
+    @Nullable
+    private SurfaceViewRenderer fullscreenRenderer;
+    @Nullable
+    private VideoFileRenderer videoFileRenderer;
+    private final List<VideoSink> remoteSinks = new ArrayList<>();
+    private Toast logToast;
+    private boolean commandLineRun;
+    private boolean activityRunning;
+    private AppRTCClient.RoomConnectionParameters roomConnectionParameters;
+    @Nullable
+    private PeerConnectionClient.PeerConnectionParameters peerConnectionParameters;
+    private boolean connected;
+    private boolean isError;
+    private boolean callControlFragmentVisible = true;
+    private long callStartedTimeMs;
+    private boolean micEnabled = true;
+    private boolean screencaptureEnabled;
+    private static Intent mediaProjectionPermissionResultData;
+    private static int mediaProjectionPermissionResultCode;
+    // True if local view is in the fullscreen renderer.
+    private boolean isSwappedFeeds;
+
+    // Controls
+    private CpuMonitor cpuMonitor;
 
     /**
      * 필요한 권한
@@ -192,16 +270,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
 
                 // 모든 권한에 동의
                 if(areAllGranted) {
-                    // 송신측에서 extra_loopback 값을 보냈다면 받고, 없으면 디폴트 false
-                    boolean loopback = receiveIntent.getBooleanExtra(PeerConfig.EXTRA_LOOPBACK, false);
-                    // 송신측에서 extra_runtime 값을 보냈다면 받고, 없으면 디폴트 0
-                    int runTimeMs = receiveIntent.getIntExtra(PeerConfig.EXTRA_RUNTIME, 0);
-                    // 송신측에서 extra_use_values_from_intent 값을 보냈다면 받고, 없으면 디폴트 false
-                    boolean useValuesFromIntent =
-                            receiveIntent.getBooleanExtra(PeerConfig.EXTRA_USE_VALUES_FROM_INTENT, false);
-
-                    // 위의 정보를 바탕으로 room으로 연결하자
-                    setting(true, loopback, useValuesFromIntent, runTimeMs);
+                    start();
                 // 모든 권한에 동의 하지 않음
                 }else{
                     finish();
@@ -214,27 +283,14 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Get setting keys.
-        PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
-        sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
-        keyprefResolution = getString(R.string.pref_resolution_key);
-        keyprefFps = getString(R.string.pref_fps_key);
-        keyprefVideoBitrateType = getString(R.string.pref_maxvideobitrate_key);
-        keyprefVideoBitrateValue = getString(R.string.pref_maxvideobitratevalue_key);
-        keyprefAudioBitrateType = getString(R.string.pref_startaudiobitrate_key);
-        keyprefAudioBitrateValue = getString(R.string.pref_startaudiobitratevalue_key);
-        keyprefRoomServerUrl = getString(R.string.pref_room_server_url_key);
-        keyprefRoom = getString(R.string.pref_room_key);
-        keyprefRoomList = getString(R.string.pref_room_list_key);
-
         binding = ActivityMeetingRoomBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
         /**
          * 전달된 Intent 받는 부분
          */
-        receiveIntent = getIntent();
-        roomId = receiveIntent.getStringExtra("roomId");
+        intent = getIntent();
+        roomId = intent.getStringExtra(EXTRA_ROOMID);
 
         if("".equals(roomId) || roomId == null){
             finish();
@@ -278,16 +334,201 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     private void start(){
-        // 송신측에서 extra_loopback 값을 보냈다면 받고, 없으면 디폴트 false
-        boolean loopback = receiveIntent.getBooleanExtra(PeerConfig.EXTRA_LOOPBACK, false);
-        // 송신측에서 extra_runtime 값을 보냈다면 받고, 없으면 디폴트 0
-        int runTimeMs = receiveIntent.getIntExtra(PeerConfig.EXTRA_RUNTIME, 0);
-        // 송신측에서 extra_use_values_from_intent 값을 보냈다면 받고, 없으면 디폴트 false
-        boolean useValuesFromIntent =
-                receiveIntent.getBooleanExtra(PeerConfig.EXTRA_USE_VALUES_FROM_INTENT, false);
+        connected = false;
+        signalingParameters = null;
 
-        // 위의 정보를 바탕으로 room으로 연결하자
-        setting(true, loopback, useValuesFromIntent, runTimeMs);
+        // Create UI controls.
+        pipRenderer = findViewById(R.id.pip_video_view);
+        fullscreenRenderer = findViewById(R.id.fullscreen_video_view);
+
+
+        /**
+         * 피드를 swap 합니다
+         */
+        pipRenderer.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                setSwappedFeeds(!isSwappedFeeds);
+            }
+        });
+
+        remoteSinks.add(remoteProxyRenderer);
+
+        /**
+         * EglBase는 EGL(EGL, Embedded-System Graphics Library)과 관련이 있으며, OpenGL ES와 하드웨어 사이의 상호 작용을 관리합니다.
+         */
+        final EglBase eglBase = EglBase.create();
+
+        /**
+         * pip 비디오 렌더러 생성
+         */
+        pipRenderer.init(eglBase.getEglBaseContext(), null);
+        pipRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
+        String saveRemoteVideoToFile = intent.getStringExtra(EXTRA_SAVE_REMOTE_VIDEO_TO_FILE);
+
+        /**
+         * 파일 형태로 Remote 로부터 비디오를 저장 시킵니다.
+         */
+        // When saveRemoteVideoToFile is set we save the video from the remote to a file.
+        if (saveRemoteVideoToFile != null) {
+            int videoOutWidth = intent.getIntExtra(EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH, 0);
+            int videoOutHeight = intent.getIntExtra(EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT, 0);
+            try {
+                videoFileRenderer = new VideoFileRenderer(
+                        saveRemoteVideoToFile, videoOutWidth, videoOutHeight, eglBase.getEglBaseContext());
+                remoteSinks.add(videoFileRenderer);
+            } catch (IOException e) {
+                throw new RuntimeException(
+                        "Failed to open video file for output: " + saveRemoteVideoToFile, e);
+            }
+        }
+
+        /**
+         * full 비디오 렌더러 생성
+         */
+        fullscreenRenderer.init(eglBase.getEglBaseContext(), null);
+        fullscreenRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
+
+        pipRenderer.setZOrderMediaOverlay(true);
+        pipRenderer.setEnableHardwareScaler(true /* enabled */);
+        fullscreenRenderer.setEnableHardwareScaler(false /* enabled */);
+
+        /**
+         * 로컬 Feed를 full screen으로 시작합니다.
+         * 그리고 전화 연결이 됐을때, swap 됩니다.
+         */
+        setSwappedFeeds(true /* isSwappedFeeds */);
+
+        /**
+         * Room uri 체크
+         */
+        Uri roomUri = intent.getData();
+        if (roomUri == null) {
+            logAndToast(getString(R.string.missing_url));
+            Log.e(TAG, "Didn't get any URL in intent!");
+            setResult(RESULT_CANCELED);
+            finish();
+            return;
+        }
+
+        /**
+         * Room ID 체크
+         */
+        String roomId = intent.getStringExtra(EXTRA_ROOMID);
+        Log.d(TAG, "Room ID: " + roomId);
+        if (roomId == null || roomId.length() == 0) {
+            logAndToast(getString(R.string.missing_url));
+            Log.e(TAG, "Incorrect room ID in intent!");
+            setResult(RESULT_CANCELED);
+            finish();
+            return;
+        }
+
+        /**
+         * Peer 연결 파라미터 설정 준비
+         */
+        boolean loopback = intent.getBooleanExtra(EXTRA_LOOPBACK, false);
+        boolean tracing = intent.getBooleanExtra(EXTRA_TRACING, false);
+
+        int videoWidth = intent.getIntExtra(EXTRA_VIDEO_WIDTH, 0);
+        int videoHeight = intent.getIntExtra(EXTRA_VIDEO_HEIGHT, 0);
+
+        screencaptureEnabled = intent.getBooleanExtra(EXTRA_SCREENCAPTURE, false);
+        // If capturing format is not specified for screencapture, use screen resolution.
+        if (screencaptureEnabled && videoWidth == 0 && videoHeight == 0) {
+            DisplayMetrics displayMetrics = getDisplayMetrics();
+            videoWidth = displayMetrics.widthPixels;
+            videoHeight = displayMetrics.heightPixels;
+        }
+        PeerConnectionClient.DataChannelParameters dataChannelParameters = null;
+
+        /**
+         * 데이터 채널 설정
+         */
+        if (intent.getBooleanExtra(EXTRA_DATA_CHANNEL_ENABLED, false)) {
+            dataChannelParameters = new PeerConnectionClient.DataChannelParameters(intent.getBooleanExtra(EXTRA_ORDERED, true),
+                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS_MS, -1),
+                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS, -1), intent.getStringExtra(EXTRA_PROTOCOL),
+                    intent.getBooleanExtra(EXTRA_NEGOTIATED, false), intent.getIntExtra(EXTRA_ID, -1));
+        }
+
+        /**
+         * Peer 연결 파라미터 생성
+         */
+        peerConnectionParameters =
+                new PeerConnectionClient.PeerConnectionParameters(intent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
+                        tracing, videoWidth, videoHeight, intent.getIntExtra(EXTRA_VIDEO_FPS, 0),
+                        intent.getIntExtra(EXTRA_VIDEO_BITRATE, 0), intent.getStringExtra(EXTRA_VIDEOCODEC),
+                        intent.getBooleanExtra(EXTRA_HWCODEC_ENABLED, true),
+                        intent.getBooleanExtra(EXTRA_FLEXFEC_ENABLED, false),
+                        intent.getIntExtra(EXTRA_AUDIO_BITRATE, 0), intent.getStringExtra(EXTRA_AUDIOCODEC),
+                        intent.getBooleanExtra(EXTRA_NOAUDIOPROCESSING_ENABLED, false),
+                        intent.getBooleanExtra(EXTRA_AECDUMP_ENABLED, false),
+                        intent.getBooleanExtra(EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED, false),
+                        intent.getBooleanExtra(EXTRA_OPENSLES_ENABLED, false),
+                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AEC, false),
+                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AGC, false),
+                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_NS, false),
+                        intent.getBooleanExtra(EXTRA_DISABLE_WEBRTC_AGC_AND_HPF, false),
+                        intent.getBooleanExtra(EXTRA_ENABLE_RTCEVENTLOG, false), dataChannelParameters);
+        commandLineRun = intent.getBooleanExtra(EXTRA_CMDLINE, false);
+        int runTimeMs = intent.getIntExtra(EXTRA_RUNTIME, 0);
+
+        Log.d(TAG, "VIDEO_FILE: '" + intent.getStringExtra(EXTRA_VIDEO_FILE_AS_CAMERA) + "'");
+
+        /**
+         * Room 명이 IP 형태라면 DirectRTCClient를 이용하고
+         * 그렇지 않을 경우엔 표준 WebSocketRTCClient를 이용합니다.
+         */
+        if (loopback || !DirectRTCClient.IP_PATTERN.matcher(roomId).matches()) {
+            appRtcClient = new WebSocketRTCClient(this);
+        } else {
+            Log.i(TAG, "Using DirectRTCClient because room name looks like an IP.");
+            appRtcClient = new DirectRTCClient(this);
+        }
+
+        /**
+         * Room 연결 파라미터 생성
+         */
+        String urlParameters = intent.getStringExtra(EXTRA_URLPARAMETERS);
+        roomConnectionParameters =
+                new AppRTCClient.RoomConnectionParameters(roomUri.toString(), roomId, loopback, urlParameters);
+
+
+        // For command line execution run connection for <runTimeMs> and exit.
+        if (commandLineRun && runTimeMs > 0) {
+            (new Handler()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    disconnect();
+                }
+            }, runTimeMs);
+        }
+
+        /**
+         * Peer 연결 클라이언트 생성
+         */
+        peerConnectionClient = new PeerConnectionClient(
+                getApplicationContext(), eglBase, peerConnectionParameters, MeetingRoomActivity.this);
+
+        /**
+         * Peer 팩토리 생성
+         */
+        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
+        if (loopback) {
+            options.networkIgnoreMask = 0;
+        }
+        peerConnectionClient.createPeerConnectionFactory(options);
+
+        /**
+         * 스크린 캡처여부에 따라 다르게 start 한다.
+         */
+        if (screencaptureEnabled) {
+            startScreenCapture();
+        } else {
+            startCall();
+        }
+
     }
 
     /**
@@ -303,157 +544,150 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         return true;
     }
 
-    private void roomIn(){
-        Toast.makeText(MeetingRoomActivity.this, roomId + "번방에 진입 했습니다.",Toast.LENGTH_SHORT).show();
+//    private void roomIn(){
+//        Toast.makeText(MeetingRoomActivity.this, roomId + "번방에 진입 했습니다.",Toast.LENGTH_SHORT).show();
+//
+//        /**
+//         * 소켓 연결
+//         */
+//        socketIoConn();
+//
+//        /**
+//         * [SurfaceViewRenderer]
+//         * 비디오 프레임을 효율적으로 렌더링할 수 있도록 도와줍니다.
+//         * EglBase와 함께 사용합니다.
+//         * 비디오 프레임을 OpenGL ES 컨텍스트로 렌더링하며, 이를 통해 빠르고 부드러운 비디오 표시가 가능합니다.
+//         *
+//         * SurfaceViewRenderer를 사용하려면 적절한 EglBase 인스턴스를 생성하고
+//         * init 메서드를 호출하여 초기화해야 합니다.
+//         * 그런 다음 SurfaceViewRenderer 인스턴스를 생성하고,
+//         * setEglRenderer 메서드를 사용하여 렌더러를 설정하고
+//         * init 메서드를 호출하여 초기화합니다.
+//         *
+//         * 마지막으로 비디오 프레임을 받아와 renderFrame 메서드를 호출하여 화면에 렌더링합니다.
+//         */
+//
+//        /**
+//         * EglBase는 EGL(EGL, Embedded-System Graphics Library)과 관련이 있으며, OpenGL ES와 하드웨어 사이의 상호 작용을 관리합니다.
+//         */
+//        eglBase = EglBase.create();
+//
+//        fullscreenRenderer = binding.fullscreenVideoView;
+//        fullscreenRenderer.init(eglBase.getEglBaseContext(), null);
+//        fullscreenRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
+//        fullscreenRenderer.setEnableHardwareScaler(true /* enabled */);
+//        fullscreenRenderer.setMirror(true);
+//
+//        /**
+//         * Peer 연결 파라미터 설정 준비
+//         */
+//        boolean loopback = intent.getBooleanExtra(EXTRA_LOOPBACK, false);
+//        boolean tracing = intent.getBooleanExtra(EXTRA_TRACING, false);
+//
+//        int videoWidth = intent.getIntExtra(EXTRA_VIDEO_WIDTH, 0);
+//        int videoHeight = intent.getIntExtra(EXTRA_VIDEO_HEIGHT, 0);
+//
+//        PeerConnectionClient.DataChannelParameters dataChannelParameters = null;
+//
+//        /**
+//         * 데이터 채널 설정
+//         */
+//        if (intent.getBooleanExtra(EXTRA_DATA_CHANNEL_ENABLED, false)) {
+//            dataChannelParameters = new PeerConnectionClient.DataChannelParameters(intent.getBooleanExtra(EXTRA_ORDERED, true),
+//                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS_MS, -1),
+//                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS, -1), intent.getStringExtra(EXTRA_PROTOCOL),
+//                    intent.getBooleanExtra(EXTRA_NEGOTIATED, false), intent.getIntExtra(EXTRA_ID, -1));
+//        }
+//
+//        /**K
+//         * Peer 연결 파라미터 생성
+//         */
+//        peerConnectionParameters =
+//                new PeerConnectionClient.PeerConnectionParameters(intent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
+//                        tracing, videoWidth, videoHeight, intent.getIntExtra(EXTRA_VIDEO_FPS, 0),
+//                        intent.getIntExtra(EXTRA_VIDEO_BITRATE, 0), intent.getStringExtra(EXTRA_VIDEOCODEC),
+//                        intent.getBooleanExtra(EXTRA_HWCODEC_ENABLED, true),
+//                        intent.getBooleanExtra(EXTRA_FLEXFEC_ENABLED, false),
+//                        intent.getIntExtra(EXTRA_AUDIO_BITRATE, 0), intent.getStringExtra(EXTRA_AUDIOCODEC),
+//                        intent.getBooleanExtra(EXTRA_NOAUDIOPROCESSING_ENABLED, false),
+//                        intent.getBooleanExtra(EXTRA_AECDUMP_ENABLED, false),
+//                        intent.getBooleanExtra(EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED, false),
+//                        intent.getBooleanExtra(EXTRA_OPENSLES_ENABLED, false),
+//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AEC, false),
+//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AGC, false),
+//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_NS, false),
+//                        intent.getBooleanExtra(EXTRA_DISABLE_WEBRTC_AGC_AND_HPF, false),
+//                        intent.getBooleanExtra(EXTRA_ENABLE_RTCEVENTLOG, false), dataChannelParameters);
+//
+//        /**
+//         * Peer 연결 클라이언트 생성
+//         */
+//        peerConnectionClient = new PeerConnectionClient(
+//                getApplicationContext(), eglBase, peerConnectionParameters, MeetingRoomActivity.this);
+//
+//        /**
+//         * Peer 팩토리 생성
+//         */
+//        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
+//        if (loopback) {
+//            options.networkIgnoreMask = 0;
+//        }
+//        createPeerConnectionFactory(options);
+//
+//        getVideoSource();
+//    }
 
-        /**
-         * 소켓 연결
-         */
-        socketIoConn();
-
-        /**
-         * [SurfaceViewRenderer]
-         * 비디오 프레임을 효율적으로 렌더링할 수 있도록 도와줍니다.
-         * EglBase와 함께 사용합니다.
-         * 비디오 프레임을 OpenGL ES 컨텍스트로 렌더링하며, 이를 통해 빠르고 부드러운 비디오 표시가 가능합니다.
-         *
-         * SurfaceViewRenderer를 사용하려면 적절한 EglBase 인스턴스를 생성하고
-         * init 메서드를 호출하여 초기화해야 합니다.
-         * 그런 다음 SurfaceViewRenderer 인스턴스를 생성하고,
-         * setEglRenderer 메서드를 사용하여 렌더러를 설정하고
-         * init 메서드를 호출하여 초기화합니다.
-         *
-         * 마지막으로 비디오 프레임을 받아와 renderFrame 메서드를 호출하여 화면에 렌더링합니다.
-         */
-
-        /**
-         * EglBase는 EGL(EGL, Embedded-System Graphics Library)과 관련이 있으며, OpenGL ES와 하드웨어 사이의 상호 작용을 관리합니다.
-         */
-        eglBase = EglBase.create();
-
-        fullscreenRenderer = binding.fullscreenVideoView;
-        fullscreenRenderer.init(eglBase.getEglBaseContext(), null);
-        fullscreenRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
-        fullscreenRenderer.setEnableHardwareScaler(true /* enabled */);
-        fullscreenRenderer.setMirror(true);
-
-        /**
-         * Peer 연결 파라미터 설정 준비
-         */
-        boolean loopback = receiveIntent.getBooleanExtra(EXTRA_LOOPBACK, false);
-        boolean tracing = receiveIntent.getBooleanExtra(EXTRA_TRACING, false);
-
-        int videoWidth = receiveIntent.getIntExtra(EXTRA_VIDEO_WIDTH, 0);
-        int videoHeight = receiveIntent.getIntExtra(EXTRA_VIDEO_HEIGHT, 0);
-
-        PeerConnectionClient.DataChannelParameters dataChannelParameters = null;
-
-        /**
-         * 데이터 채널 설정
-         */
-        if (receiveIntent.getBooleanExtra(EXTRA_DATA_CHANNEL_ENABLED, false)) {
-            dataChannelParameters = new PeerConnectionClient.DataChannelParameters(receiveIntent.getBooleanExtra(EXTRA_ORDERED, true),
-                    receiveIntent.getIntExtra(EXTRA_MAX_RETRANSMITS_MS, -1),
-                    receiveIntent.getIntExtra(EXTRA_MAX_RETRANSMITS, -1), receiveIntent.getStringExtra(EXTRA_PROTOCOL),
-                    receiveIntent.getBooleanExtra(EXTRA_NEGOTIATED, false), receiveIntent.getIntExtra(EXTRA_ID, -1));
-        }
-
-        /**K
-         * Peer 연결 파라미터 생성
-         */
-        peerConnectionParameters =
-                new PeerConnectionClient.PeerConnectionParameters(receiveIntent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
-                        tracing, videoWidth, videoHeight, receiveIntent.getIntExtra(EXTRA_VIDEO_FPS, 0),
-                        receiveIntent.getIntExtra(EXTRA_VIDEO_BITRATE, 0), receiveIntent.getStringExtra(EXTRA_VIDEOCODEC),
-                        receiveIntent.getBooleanExtra(EXTRA_HWCODEC_ENABLED, true),
-                        receiveIntent.getBooleanExtra(EXTRA_FLEXFEC_ENABLED, false),
-                        receiveIntent.getIntExtra(EXTRA_AUDIO_BITRATE, 0), receiveIntent.getStringExtra(EXTRA_AUDIOCODEC),
-                        receiveIntent.getBooleanExtra(EXTRA_NOAUDIOPROCESSING_ENABLED, false),
-                        receiveIntent.getBooleanExtra(EXTRA_AECDUMP_ENABLED, false),
-                        receiveIntent.getBooleanExtra(EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED, false),
-                        receiveIntent.getBooleanExtra(EXTRA_OPENSLES_ENABLED, false),
-                        receiveIntent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AEC, false),
-                        receiveIntent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AGC, false),
-                        receiveIntent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_NS, false),
-                        receiveIntent.getBooleanExtra(EXTRA_DISABLE_WEBRTC_AGC_AND_HPF, false),
-                        receiveIntent.getBooleanExtra(EXTRA_ENABLE_RTCEVENTLOG, false), dataChannelParameters);
-
-        /**
-         * Peer 연결 클라이언트 생성
-         */
-        peerConnectionClient = new PeerConnectionClient(
-                getApplicationContext(), eglBase, peerConnectionParameters, MeetingRoomActivity.this);
-
-        /**
-         * Peer 팩토리 생성
-         */
-        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
-        if (loopback) {
-            options.networkIgnoreMask = 0;
-        }
-        createPeerConnectionFactory(options);
-
-        getVideoSource();
-    }
-
-    private void socketIoConn(){
-//        MyApplication app = (MyApplication) getApplication();
-//        mSocket = app.getSocket();
-
-        try {
-            mSocket = IO.socket(Constants.CHAT_SERVER_URL);
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
-        }
-
-        mSocket.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
-            @Override
-            public void call(Object... args) {
-                // 연결 성공 시 실행되는 코드
-                Log.d("TEST", "소켓 연결");
-                mSocket.emit("join", roomId);
-            }
-        }).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
-            @Override
-            public void call(Object... args) {
-                Log.d("TEST", "소켓 종료");
-            }
-        }).on("message", new Emitter.Listener() {
-            @Override
-            public void call(Object... args) {
-                try{
-                    String message = args[0].toString();
-                    JSONObject jsonObject = new JSONObject(message);
-                    Log.d("TEST", jsonObject.toString());
-                    String type = jsonObject.getString("type");
-                    if("userList".equals(type)){
-                        JSONArray jsonArray = (JSONArray) jsonObject.get("userList");
-                        for (int i = 0; i < jsonArray.length(); i++){
-                            JSONObject userObj = new JSONObject(jsonArray.get(i).toString());
-                            String clientID = userObj.get("clientID").toString();
-                            Log.d("TEST", "userObj:"+userObj);
-                            Log.d("TEST", "clientID:"+clientID);
-
-                            userModelList.add(new UserModel(clientID));
-                        }
-                        // 유저 리스트 로그
-                        showUserList();
-                    }
-                }catch (Exception e){
-                    e.printStackTrace();
-                    Log.e("TEST", e.toString());
-                }
-            }
-        });
-        mSocket.connect();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mSocket.disconnect();
-        mSocket = null;
-    }
+//    private void socketIoConn(){
+////        MyApplication app = (MyApplication) getApplication();
+////        mSocket = app.getSocket();
+//
+//        try {
+//            mSocket = IO.socket(Constants.CHAT_SERVER_URL);
+//        } catch (URISyntaxException e) {
+//            throw new RuntimeException(e);
+//        }
+//
+//        mSocket.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
+//            @Override
+//            public void call(Object... args) {
+//                // 연결 성공 시 실행되는 코드
+//                Log.d("TEST", "소켓 연결");
+//                mSocket.emit("join", roomId);
+//            }
+//        }).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
+//            @Override
+//            public void call(Object... args) {
+//                Log.d("TEST", "소켓 종료");
+//            }
+//        }).on("message", new Emitter.Listener() {
+//            @Override
+//            public void call(Object... args) {
+//                try{
+//                    String message = args[0].toString();
+//                    JSONObject jsonObject = new JSONObject(message);
+//                    Log.d("TEST", jsonObject.toString());
+//                    String type = jsonObject.getString("type");
+//                    if("userList".equals(type)){
+//                        JSONArray jsonArray = (JSONArray) jsonObject.get("userList");
+//                        for (int i = 0; i < jsonArray.length(); i++){
+//                            JSONObject userObj = new JSONObject(jsonArray.get(i).toString());
+//                            String clientID = userObj.get("clientID").toString();
+//                            Log.d("TEST", "userObj:"+userObj);
+//                            Log.d("TEST", "clientID:"+clientID);
+//
+//                            userModelList.add(new UserModel(clientID));
+//                        }
+//                        // 유저 리스트 로그
+//                        showUserList();
+//                    }
+//                }catch (Exception e){
+//                    e.printStackTrace();
+//                    Log.e("TEST", e.toString());
+//                }
+//            }
+//        });
+//        mSocket.connect();
+//    }
 
     private void showUserList(){
         Log.d("TEST", "==========[유저 리스트 시작]==========");
@@ -462,117 +696,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             Log.d("TEST", userModel.toString());
         }
         Log.d("TEST", "==========[유저 리스트 끝]==========");
-    }
-
-    private @Nullable VideoCapturer createCameraCapturer(CameraEnumerator enumerator) {
-        final String[] deviceNames = enumerator.getDeviceNames();
-
-        // First, try to find front facing camera
-        Logging.d(TAG, "Looking for front facing cameras.");
-        for (String deviceName : deviceNames) {
-            if (enumerator.isFrontFacing(deviceName)) {
-                Logging.d(TAG, "Creating front facing camera capturer.");
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-
-                if (videoCapturer != null) {
-                    return videoCapturer;
-                }
-            }
-        }
-
-        // Front facing camera not found, try something else
-        Logging.d(TAG, "Looking for other cameras.");
-        for (String deviceName : deviceNames) {
-            if (!enumerator.isFrontFacing(deviceName)) {
-                Logging.d(TAG, "Creating other camera capturer.");
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-
-                if (videoCapturer != null) {
-                    return videoCapturer;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private void createPeerConnectionFactory(PeerConnectionFactory.Options options) {
-
-        /**
-         * webRTC 추적 기능 존재 하면 설정
-         */
-        if (peerConnectionParameters.tracing) {
-            PeerConnectionFactory.startInternalTracingCapture(
-                    Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator
-                            + "webrtc-trace.txt");
-        }
-
-        /**
-         * Isac 사용 여부 확인
-         */
-        preferIsac = peerConnectionParameters.audioCodec != null
-                && peerConnectionParameters.audioCodec.equals(AUDIO_CODEC_ISAC);
-
-        /**
-         * 녹음 오디오를 파일로 저장
-         */
-        if (peerConnectionParameters.saveInputAudioToFile) {
-            if (!peerConnectionParameters.useOpenSLES) {
-                Log.d(TAG, "Enable recording of microphone input audio to file");
-//        saveRecordedAudioToFile = new RecordedAudioToFileController(executor);
-            } else {
-                // TODO(henrika): ensure that the UI reflects that if OpenSL ES is selected,
-                // then the "Save inut audio to file" option shall be grayed out.
-                Log.e(TAG, "Recording of input audio is not supported for OpenSL ES");
-            }
-        }
-
-        final AudioDeviceModule adm = createJavaAudioDevice();
-
-        /**
-         * Peer Connection 팩토리 생성
-         */
-        if (options != null) {
-            Log.d(TAG, "Factory networkIgnoreMask option: " + options.networkIgnoreMask);
-        }
-
-        /**
-         * 인코딩/디코딩 팩토리 생성
-         */
-        final boolean enableH264HighProfile =
-                VIDEO_CODEC_H264_HIGH.equals(peerConnectionParameters.videoCodec);
-        final VideoEncoderFactory encoderFactory;
-        final VideoDecoderFactory decoderFactory;
-
-        if (peerConnectionParameters.videoCodecHwAcceleration) {
-            encoderFactory = new DefaultVideoEncoderFactory(
-                    eglBase.getEglBaseContext(), true /* enableIntelVp8Encoder */, enableH264HighProfile);
-            decoderFactory = new DefaultVideoDecoderFactory(eglBase.getEglBaseContext());
-        } else {
-            encoderFactory = new SoftwareVideoEncoderFactory();
-            decoderFactory = new SoftwareVideoDecoderFactory();
-        }
-
-        /**
-         * encryption 설정
-         */
-        if (peerConnectionParameters.loopback) {
-            options.disableEncryption = true;
-        }
-
-        /**
-         * 팩토리 생성
-         */
-        factory = PeerConnectionFactory.builder()
-                .setOptions(options)
-                .setAudioDeviceModule(adm)
-                .setVideoEncoderFactory(encoderFactory)
-                .setVideoDecoderFactory(decoderFactory)
-                .createPeerConnectionFactory();
-
-        Log.d(TAG, "Peer connection factory created.");
-
-        adm.release();
     }
 
     /**
@@ -621,400 +744,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
 
     }
 
-    AudioDeviceModule createJavaAudioDevice() {
-        // Enable/disable OpenSL ES playback.
-        if (!peerConnectionParameters.useOpenSLES) {
-            Log.w(TAG, "External OpenSLES ADM not implemented yet.");
-            // TODO(magjed): Add support for external OpenSLES ADM.
-        }
-
-        // Set audio record error callbacks.
-        JavaAudioDeviceModule.AudioRecordErrorCallback audioRecordErrorCallback = new JavaAudioDeviceModule.AudioRecordErrorCallback() {
-            @Override
-            public void onWebRtcAudioRecordInitError(String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioRecordInitError: " + errorMessage);
-            }
-
-            @Override
-            public void onWebRtcAudioRecordStartError(
-                    JavaAudioDeviceModule.AudioRecordStartErrorCode errorCode, String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioRecordStartError: " + errorCode + ". " + errorMessage);
-            }
-
-            @Override
-            public void onWebRtcAudioRecordError(String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioRecordError: " + errorMessage);
-            }
-        };
-
-        JavaAudioDeviceModule.AudioTrackErrorCallback audioTrackErrorCallback = new JavaAudioDeviceModule.AudioTrackErrorCallback() {
-            @Override
-            public void onWebRtcAudioTrackInitError(String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioTrackInitError: " + errorMessage);
-            }
-
-            @Override
-            public void onWebRtcAudioTrackStartError(
-                    JavaAudioDeviceModule.AudioTrackStartErrorCode errorCode, String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioTrackStartError: " + errorCode + ". " + errorMessage);
-            }
-
-            @Override
-            public void onWebRtcAudioTrackError(String errorMessage) {
-                Log.e(TAG, "onWebRtcAudioTrackError: " + errorMessage);
-            }
-        };
-
-        // Set audio record state callbacks.
-        JavaAudioDeviceModule.AudioRecordStateCallback audioRecordStateCallback = new JavaAudioDeviceModule.AudioRecordStateCallback() {
-            @Override
-            public void onWebRtcAudioRecordStart() {
-                Log.i(TAG, "Audio recording starts");
-            }
-
-            @Override
-            public void onWebRtcAudioRecordStop() {
-                Log.i(TAG, "Audio recording stops");
-            }
-        };
-
-        // Set audio track state callbacks.
-        JavaAudioDeviceModule.AudioTrackStateCallback audioTrackStateCallback = new JavaAudioDeviceModule.AudioTrackStateCallback() {
-            @Override
-            public void onWebRtcAudioTrackStart() {
-                Log.i(TAG, "Audio playout starts");
-            }
-
-            @Override
-            public void onWebRtcAudioTrackStop() {
-                Log.i(TAG, "Audio playout stops");
-            }
-        };
-
-        return JavaAudioDeviceModule.builder(getApplicationContext())
-//        .setSamplesReadyCallback(saveRecordedAudioToFile)
-                .setUseHardwareAcousticEchoCanceler(!peerConnectionParameters.disableBuiltInAEC)
-                .setUseHardwareNoiseSuppressor(!peerConnectionParameters.disableBuiltInNS)
-                .setAudioRecordErrorCallback(audioRecordErrorCallback)
-                .setAudioTrackErrorCallback(audioTrackErrorCallback)
-                .setAudioRecordStateCallback(audioRecordStateCallback)
-                .setAudioTrackStateCallback(audioTrackStateCallback)
-                .createAudioDeviceModule();
-    }
-
-    private static boolean commandLineRun;
-
-    private void setting(boolean commandLineRun, boolean loopback, boolean useValuesFromIntent, int runTimeMs){
-        MeetingRoomActivity.commandLineRun = commandLineRun;
-
-        // roomId is random for loopback.
-        if (loopback) {
-            roomId = Integer.toString((new Random()).nextInt(100000000));
-        }
-
-        // Video call enabled flag.
-        boolean videoCallEnabled = sharedPrefGetBoolean(R.string.pref_videocall_key,
-                PeerConfig.EXTRA_VIDEO_CALL, R.string.pref_videocall_default, useValuesFromIntent);
-
-        // Use screencapture option.
-        boolean useScreencapture = sharedPrefGetBoolean(R.string.pref_screencapture_key,
-                PeerConfig.EXTRA_SCREENCAPTURE, R.string.pref_screencapture_default, useValuesFromIntent);
-
-        // Use Camera2 option.
-        boolean useCamera2 = sharedPrefGetBoolean(R.string.pref_camera2_key, PeerConfig.EXTRA_CAMERA2,
-                R.string.pref_camera2_default, useValuesFromIntent);
-
-        // Get default codecs.
-        String videoCodec = sharedPrefGetString(R.string.pref_videocodec_key,
-                PeerConfig.EXTRA_VIDEOCODEC, R.string.pref_videocodec_default, useValuesFromIntent);
-        String audioCodec = sharedPrefGetString(R.string.pref_audiocodec_key,
-                PeerConfig.EXTRA_AUDIOCODEC, R.string.pref_audiocodec_default, useValuesFromIntent);
-
-        // Check HW codec flag.
-        boolean hwCodec = sharedPrefGetBoolean(R.string.pref_hwcodec_key,
-                PeerConfig.EXTRA_HWCODEC_ENABLED, R.string.pref_hwcodec_default, useValuesFromIntent);
-
-        // Check Capture to texture.
-        boolean captureToTexture = sharedPrefGetBoolean(R.string.pref_capturetotexture_key,
-                PeerConfig.EXTRA_CAPTURETOTEXTURE_ENABLED, R.string.pref_capturetotexture_default,
-                useValuesFromIntent);
-
-        // Check FlexFEC.
-        boolean flexfecEnabled = sharedPrefGetBoolean(R.string.pref_flexfec_key,
-                PeerConfig.EXTRA_FLEXFEC_ENABLED, R.string.pref_flexfec_default, useValuesFromIntent);
-
-        // Check Disable Audio Processing flag.
-        boolean noAudioProcessing = sharedPrefGetBoolean(R.string.pref_noaudioprocessing_key,
-                PeerConfig.EXTRA_NOAUDIOPROCESSING_ENABLED, R.string.pref_noaudioprocessing_default,
-                useValuesFromIntent);
-
-        boolean aecDump = sharedPrefGetBoolean(R.string.pref_aecdump_key,
-                PeerConfig.EXTRA_AECDUMP_ENABLED, R.string.pref_aecdump_default, useValuesFromIntent);
-
-        boolean saveInputAudioToFile =
-                sharedPrefGetBoolean(R.string.pref_enable_save_input_audio_to_file_key,
-                        PeerConfig.EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED,
-                        R.string.pref_enable_save_input_audio_to_file_default, useValuesFromIntent);
-
-        // Check OpenSL ES enabled flag.
-        boolean useOpenSLES = sharedPrefGetBoolean(R.string.pref_opensles_key,
-                PeerConfig.EXTRA_OPENSLES_ENABLED, R.string.pref_opensles_default, useValuesFromIntent);
-
-        // Check Disable built-in AEC flag.
-        boolean disableBuiltInAEC = sharedPrefGetBoolean(R.string.pref_disable_built_in_aec_key,
-                PeerConfig.EXTRA_DISABLE_BUILT_IN_AEC, R.string.pref_disable_built_in_aec_default,
-                useValuesFromIntent);
-
-        // Check Disable built-in AGC flag.
-        boolean disableBuiltInAGC = sharedPrefGetBoolean(R.string.pref_disable_built_in_agc_key,
-                PeerConfig.EXTRA_DISABLE_BUILT_IN_AGC, R.string.pref_disable_built_in_agc_default,
-                useValuesFromIntent);
-
-        // Check Disable built-in NS flag.
-        boolean disableBuiltInNS = sharedPrefGetBoolean(R.string.pref_disable_built_in_ns_key,
-                PeerConfig.EXTRA_DISABLE_BUILT_IN_NS, R.string.pref_disable_built_in_ns_default,
-                useValuesFromIntent);
-
-        // Check Disable gain control
-        boolean disableWebRtcAGCAndHPF = sharedPrefGetBoolean(
-                R.string.pref_disable_webrtc_agc_and_hpf_key, PeerConfig.EXTRA_DISABLE_WEBRTC_AGC_AND_HPF,
-                R.string.pref_disable_webrtc_agc_and_hpf_key, useValuesFromIntent);
-
-        // Get video resolution from settings.
-        int videoWidth = 0;
-        int videoHeight = 0;
-        if (useValuesFromIntent) {
-            videoWidth = this.getIntent().getIntExtra(PeerConfig.EXTRA_VIDEO_WIDTH, 0);
-            videoHeight = this.getIntent().getIntExtra(PeerConfig.EXTRA_VIDEO_HEIGHT, 0);
-        }
-        if (videoWidth == 0 && videoHeight == 0) {
-            String resolution =
-                    sharedPref.getString(keyprefResolution, getString(R.string.pref_resolution_default));
-            String[] dimensions = resolution.split("[ x]+");
-            if (dimensions.length == 2) {
-                try {
-                    videoWidth = Integer.parseInt(dimensions[0]);
-                    videoHeight = Integer.parseInt(dimensions[1]);
-                } catch (NumberFormatException e) {
-                    videoWidth = 0;
-                    videoHeight = 0;
-                    Log.e(TAG, "Wrong video resolution setting: " + resolution);
-                }
-            }
-        }
-
-        // Get camera fps from settings.
-        int cameraFps = 0;
-        if (useValuesFromIntent) {
-            cameraFps = getIntent().getIntExtra(PeerConfig.EXTRA_VIDEO_FPS, 0);
-        }
-        if (cameraFps == 0) {
-            String fps = sharedPref.getString(keyprefFps, getString(R.string.pref_fps_default));
-            String[] fpsValues = fps.split("[ x]+");
-            if (fpsValues.length == 2) {
-                try {
-                    cameraFps = Integer.parseInt(fpsValues[0]);
-                } catch (NumberFormatException e) {
-                    cameraFps = 0;
-                    Log.e(TAG, "Wrong camera fps setting: " + fps);
-                }
-            }
-        }
-
-        // Check capture quality slider flag.
-        boolean captureQualitySlider = sharedPrefGetBoolean(R.string.pref_capturequalityslider_key,
-                PeerConfig.EXTRA_VIDEO_CAPTUREQUALITYSLIDER_ENABLED,
-                R.string.pref_capturequalityslider_default, useValuesFromIntent);
-
-        // Get video and audio start bitrate.
-        int videoStartBitrate = 0;
-        if (useValuesFromIntent) {
-            videoStartBitrate = getIntent().getIntExtra(PeerConfig.EXTRA_VIDEO_BITRATE, 0);
-        }
-        if (videoStartBitrate == 0) {
-            String bitrateTypeDefault = getString(R.string.pref_maxvideobitrate_default);
-            String bitrateType = sharedPref.getString(keyprefVideoBitrateType, bitrateTypeDefault);
-            if (!bitrateType.equals(bitrateTypeDefault)) {
-                String bitrateValue = sharedPref.getString(
-                        keyprefVideoBitrateValue, getString(R.string.pref_maxvideobitratevalue_default));
-                videoStartBitrate = Integer.parseInt(bitrateValue);
-            }
-        }
-
-        int audioStartBitrate = 0;
-        if (useValuesFromIntent) {
-            audioStartBitrate = getIntent().getIntExtra(PeerConfig.EXTRA_AUDIO_BITRATE, 0);
-        }
-        if (audioStartBitrate == 0) {
-            String bitrateTypeDefault = getString(R.string.pref_startaudiobitrate_default);
-            String bitrateType = sharedPref.getString(keyprefAudioBitrateType, bitrateTypeDefault);
-            if (!bitrateType.equals(bitrateTypeDefault)) {
-                String bitrateValue = sharedPref.getString(
-                        keyprefAudioBitrateValue, getString(R.string.pref_startaudiobitratevalue_default));
-                audioStartBitrate = Integer.parseInt(bitrateValue);
-            }
-        }
-
-        // Check statistics display option.
-        boolean displayHud = sharedPrefGetBoolean(R.string.pref_displayhud_key,
-                PeerConfig.EXTRA_DISPLAY_HUD, R.string.pref_displayhud_default, useValuesFromIntent);
-
-        boolean tracing = sharedPrefGetBoolean(R.string.pref_tracing_key, PeerConfig.EXTRA_TRACING,
-                R.string.pref_tracing_default, useValuesFromIntent);
-
-        // Check Enable RtcEventLog.
-        boolean rtcEventLogEnabled = sharedPrefGetBoolean(R.string.pref_enable_rtceventlog_key,
-                PeerConfig.EXTRA_ENABLE_RTCEVENTLOG, R.string.pref_enable_rtceventlog_default,
-                useValuesFromIntent);
-
-        // Get datachannel options
-        boolean dataChannelEnabled = sharedPrefGetBoolean(R.string.pref_enable_datachannel_key,
-                PeerConfig.EXTRA_DATA_CHANNEL_ENABLED, R.string.pref_enable_datachannel_default,
-                useValuesFromIntent);
-        boolean ordered = sharedPrefGetBoolean(R.string.pref_ordered_key, PeerConfig.EXTRA_ORDERED,
-                R.string.pref_ordered_default, useValuesFromIntent);
-        boolean negotiated = sharedPrefGetBoolean(R.string.pref_negotiated_key,
-                PeerConfig.EXTRA_NEGOTIATED, R.string.pref_negotiated_default, useValuesFromIntent);
-        int maxRetrMs = sharedPrefGetInteger(R.string.pref_max_retransmit_time_ms_key,
-                PeerConfig.EXTRA_MAX_RETRANSMITS_MS, R.string.pref_max_retransmit_time_ms_default,
-                useValuesFromIntent);
-        int maxRetr =
-                sharedPrefGetInteger(R.string.pref_max_retransmits_key, PeerConfig.EXTRA_MAX_RETRANSMITS,
-                        R.string.pref_max_retransmits_default, useValuesFromIntent);
-        int id = sharedPrefGetInteger(R.string.pref_data_id_key, PeerConfig.EXTRA_ID,
-                R.string.pref_data_id_default, useValuesFromIntent);
-        String protocol = sharedPrefGetString(R.string.pref_data_protocol_key,
-                PeerConfig.EXTRA_PROTOCOL, R.string.pref_data_protocol_default, useValuesFromIntent);
-
-        // Start AppRTCMobile activity.
-        Log.d(TAG, "Connecting to room " + roomId);
-        if (roomId != null) {
-            receiveIntent.putExtra(PeerConfig.EXTRA_ROOMID, roomId);
-            receiveIntent.putExtra(PeerConfig.EXTRA_LOOPBACK, loopback);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_CALL, videoCallEnabled);
-            receiveIntent.putExtra(PeerConfig.EXTRA_SCREENCAPTURE, useScreencapture);
-            receiveIntent.putExtra(PeerConfig.EXTRA_CAMERA2, useCamera2);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_WIDTH, videoWidth);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_HEIGHT, videoHeight);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_FPS, cameraFps);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_CAPTUREQUALITYSLIDER_ENABLED, captureQualitySlider);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_BITRATE, videoStartBitrate);
-            receiveIntent.putExtra(PeerConfig.EXTRA_VIDEOCODEC, videoCodec);
-            receiveIntent.putExtra(PeerConfig.EXTRA_HWCODEC_ENABLED, hwCodec);
-            receiveIntent.putExtra(PeerConfig.EXTRA_CAPTURETOTEXTURE_ENABLED, captureToTexture);
-            receiveIntent.putExtra(PeerConfig.EXTRA_FLEXFEC_ENABLED, flexfecEnabled);
-            receiveIntent.putExtra(PeerConfig.EXTRA_NOAUDIOPROCESSING_ENABLED, noAudioProcessing);
-            receiveIntent.putExtra(PeerConfig.EXTRA_AECDUMP_ENABLED, aecDump);
-            receiveIntent.putExtra(PeerConfig.EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED, saveInputAudioToFile);
-            receiveIntent.putExtra(PeerConfig.EXTRA_OPENSLES_ENABLED, useOpenSLES);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DISABLE_BUILT_IN_AEC, disableBuiltInAEC);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DISABLE_BUILT_IN_AGC, disableBuiltInAGC);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DISABLE_BUILT_IN_NS, disableBuiltInNS);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DISABLE_WEBRTC_AGC_AND_HPF, disableWebRtcAGCAndHPF);
-            receiveIntent.putExtra(PeerConfig.EXTRA_AUDIO_BITRATE, audioStartBitrate);
-            receiveIntent.putExtra(PeerConfig.EXTRA_AUDIOCODEC, audioCodec);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DISPLAY_HUD, displayHud);
-            receiveIntent.putExtra(PeerConfig.EXTRA_TRACING, tracing);
-            receiveIntent.putExtra(PeerConfig.EXTRA_ENABLE_RTCEVENTLOG, rtcEventLogEnabled);
-            receiveIntent.putExtra(PeerConfig.EXTRA_CMDLINE, commandLineRun);
-            receiveIntent.putExtra(PeerConfig.EXTRA_RUNTIME, runTimeMs);
-            receiveIntent.putExtra(PeerConfig.EXTRA_DATA_CHANNEL_ENABLED, dataChannelEnabled);
-
-            if (dataChannelEnabled) {
-                receiveIntent.putExtra(PeerConfig.EXTRA_ORDERED, ordered);
-                receiveIntent.putExtra(PeerConfig.EXTRA_MAX_RETRANSMITS_MS, maxRetrMs);
-                receiveIntent.putExtra(PeerConfig.EXTRA_MAX_RETRANSMITS, maxRetr);
-                receiveIntent.putExtra(PeerConfig.EXTRA_PROTOCOL, protocol);
-                receiveIntent.putExtra(PeerConfig.EXTRA_NEGOTIATED, negotiated);
-                receiveIntent.putExtra(PeerConfig.EXTRA_ID, id);
-            }
-
-            if (useValuesFromIntent) {
-                if (getIntent().hasExtra(PeerConfig.EXTRA_VIDEO_FILE_AS_CAMERA)) {
-                    String videoFileAsCamera =
-                            getIntent().getStringExtra(PeerConfig.EXTRA_VIDEO_FILE_AS_CAMERA);
-                    receiveIntent.putExtra(PeerConfig.EXTRA_VIDEO_FILE_AS_CAMERA, videoFileAsCamera);
-                }
-
-                if (getIntent().hasExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE)) {
-                    String saveRemoteVideoToFile =
-                            getIntent().getStringExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE);
-                    receiveIntent.putExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE, saveRemoteVideoToFile);
-                }
-
-                if (getIntent().hasExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH)) {
-                    int videoOutWidth =
-                            getIntent().getIntExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH, 0);
-                    receiveIntent.putExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH, videoOutWidth);
-                }
-
-                if (getIntent().hasExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT)) {
-                    int videoOutHeight =
-                            getIntent().getIntExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT, 0);
-                    receiveIntent.putExtra(PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT, videoOutHeight);
-                }
-            }
-        }
-
-        roomIn();
-    }
-
-    /**
-     * Get a value from the shared preference or from the intent, if it does not
-     * exist the default is used.
-     */
-    @Nullable
-    private String sharedPrefGetString(
-            int attributeId, String intentName, int defaultId, boolean useFromIntent) {
-        String defaultValue = getString(defaultId);
-        if (useFromIntent) {
-            String value = getIntent().getStringExtra(intentName);
-            if (value != null) {
-                return value;
-            }
-            return defaultValue;
-        } else {
-            String attributeName = getString(attributeId);
-            return sharedPref.getString(attributeName, defaultValue);
-        }
-    }
-
-    /**
-     * Get a value from the shared preference or from the intent, if it does not
-     * exist the default is used.
-     */
-    private boolean sharedPrefGetBoolean(
-            int attributeId, String intentName, int defaultId, boolean useFromIntent) {
-        boolean defaultValue = Boolean.parseBoolean(getString(defaultId));
-        if (useFromIntent) {
-            return getIntent().getBooleanExtra(intentName, defaultValue);
-        } else {
-            String attributeName = getString(attributeId);
-            return sharedPref.getBoolean(attributeName, defaultValue);
-        }
-    }
-
-    /**
-     * Get a value from the shared preference or from the intent, if it does not
-     * exist the default is used.
-     */
-    private int sharedPrefGetInteger(
-            int attributeId, String intentName, int defaultId, boolean useFromIntent) {
-        String defaultString = getString(defaultId);
-        int defaultValue = Integer.parseInt(defaultString);
-        if (useFromIntent) {
-            return getIntent().getIntExtra(intentName, defaultValue);
-        } else {
-            String attributeName = getString(attributeId);
-            String value = sharedPref.getString(attributeName, defaultString);
-            try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                Log.e(TAG, "Wrong setting for: " + attributeName + ":" + value);
-                return defaultValue;
-            }
-        }
-    }
 
     @TargetApi(Build.VERSION_CODES.M)
     private String[] getMissingPermissions() {
@@ -1046,85 +775,568 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         return missingPermissions.toArray(new String[missingPermissions.size()]);
     }
 
+    private DisplayMetrics getDisplayMetrics() {
+        /**
+         * DisplayMetrics : 화면의 크기, 밀도 및 해상도와 같은 디스플레이 관련 정보를 얻을 수 있는 도구입니다.
+         */
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        WindowManager windowManager =
+                (WindowManager) getApplication().getSystemService(Context.WINDOW_SERVICE);
 
+        windowManager.getDefaultDisplay().getRealMetrics(displayMetrics);
+        return displayMetrics;
+    }
 
+    private static int getSystemUiVisibility() {
+        /**
+         * 전체화면 옵션
+         * immersive 모드는 사용자가 화면과 많이 상호작용하는 앱용으로 만들어졌습니다.
+         * 시스템 표시줄을 다시 표시하려면 시스템 표시줄이 숨겨진 가장자리에서 스와이프하면 됩니다.
+         */
+        return View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+    }
+
+    private void startScreenCapture() {
+        MediaProjectionManager mediaProjectionManager =
+                (MediaProjectionManager) getApplication().getSystemService(
+                        Context.MEDIA_PROJECTION_SERVICE);
+        startActivityForResult(
+                mediaProjectionManager.createScreenCaptureIntent(), CAPTURE_PERMISSION_REQUEST_CODE);
+    }
+
+    private boolean useCamera2() {
+        return Camera2Enumerator.isSupported(this) && getIntent().getBooleanExtra(EXTRA_CAMERA2, true);
+    }
+
+    private boolean captureToTexture() {
+        return getIntent().getBooleanExtra(EXTRA_CAPTURETOTEXTURE_ENABLED, false);
+    }
+
+    private @Nullable VideoCapturer createCameraCapturer(CameraEnumerator enumerator) {
+        final String[] deviceNames = enumerator.getDeviceNames();
+
+        // First, try to find front facing camera
+        Logging.d(TAG, "Looking for front facing cameras.");
+        for (String deviceName : deviceNames) {
+            if (enumerator.isFrontFacing(deviceName)) {
+                Logging.d(TAG, "Creating front facing camera capturer.");
+                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
+
+                if (videoCapturer != null) {
+                    return videoCapturer;
+                }
+            }
+        }
+
+        // Front facing camera not found, try something else
+        Logging.d(TAG, "Looking for other cameras.");
+        for (String deviceName : deviceNames) {
+            if (!enumerator.isFrontFacing(deviceName)) {
+                Logging.d(TAG, "Creating other camera capturer.");
+                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
+
+                if (videoCapturer != null) {
+                    return videoCapturer;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private @Nullable VideoCapturer createScreenCapturer() {
+        if (mediaProjectionPermissionResultCode != Activity.RESULT_OK) {
+            reportError("User didn't give permission to capture the screen.");
+            return null;
+        }
+        return new ScreenCapturerAndroid(
+                mediaProjectionPermissionResultData, new MediaProjection.Callback() {
+            @Override
+            public void onStop() {
+                reportError("User revoked permission to capture the screen.");
+            }
+        });
+    }
+
+    // Activity interfaces
     @Override
-    public void onConnectedToRoom(AppRTCClient.SignalingParameters params) {
-
+    public void onStop() {
+        super.onStop();
+        activityRunning = false;
+        // Don't stop the video when using screencapture to allow user to show other apps to the remote
+        // end.
+        if (peerConnectionClient != null && !screencaptureEnabled) {
+            peerConnectionClient.stopVideoSource();
+        }
+        if (cpuMonitor != null) {
+            cpuMonitor.pause();
+        }
     }
 
     @Override
-    public void onRemoteDescription(SessionDescription sdp) {
-
+    public void onStart() {
+        super.onStart();
+        activityRunning = true;
+        // Video is not paused for screencapture. See onPause.
+        if (peerConnectionClient != null && !screencaptureEnabled) {
+            peerConnectionClient.startVideoSource();
+        }
+        if (cpuMonitor != null) {
+            cpuMonitor.resume();
+        }
     }
 
     @Override
-    public void onRemoteIceCandidate(IceCandidate candidate) {
+    protected void onDestroy() {
+        Thread.setDefaultUncaughtExceptionHandler(null);
+        disconnect();
+        if (logToast != null) {
+            logToast.cancel();
+        }
+        activityRunning = false;
 
+        mSocket.disconnect();
+        mSocket = null;
+
+        super.onDestroy();
+    }
+
+    // CallFragment.OnCallEvents interface implementation.
+    @Override
+    public void onCallHangUp() {
+        disconnect();
     }
 
     @Override
-    public void onRemoteIceCandidatesRemoved(IceCandidate[] candidates) {
+    public void onCameraSwitch() {
+        if (peerConnectionClient != null) {
+            peerConnectionClient.switchCamera();
+        }
+    }
 
+    @Override
+    public void onVideoScalingSwitch(RendererCommon.ScalingType scalingType) {
+        fullscreenRenderer.setScalingType(scalingType);
+    }
+
+    @Override
+    public void onCaptureFormatChange(int width, int height, int framerate) {
+        if (peerConnectionClient != null) {
+            peerConnectionClient.changeCaptureFormat(width, height, framerate);
+        }
+    }
+
+    @Override
+    public boolean onToggleMic() {
+        if (peerConnectionClient != null) {
+            micEnabled = !micEnabled;
+            peerConnectionClient.setAudioEnabled(micEnabled);
+        }
+        return micEnabled;
+    }
+
+    /**
+     * call 시작
+     */
+    private void startCall() {
+        if (appRtcClient == null) {
+            Log.e(TAG, "AppRTC client is not allocated for a call.");
+            return;
+        }
+        callStartedTimeMs = System.currentTimeMillis();
+
+        /**
+         * Room 연결 시작
+         * appRtcClient 는 소켓 통신을 위한 객체
+         */
+        logAndToast(getString(R.string.connecting_to, roomConnectionParameters.roomUrl));
+        appRtcClient.connectToRoom(roomConnectionParameters);
+
+        audioManager = AppRTCAudioManager.create(getApplicationContext());
+        // Store existing audio settings and change audio mode to
+        // MODE_IN_COMMUNICATION for best possible VoIP performance.
+        Log.d(TAG, "Starting the audio manager...");
+        audioManager.start(new AppRTCAudioManager.AudioManagerEvents() {
+            /**
+             * 이용 가능한 오디오 디바이스의 수가 바뀔때 마다 이 method가 호출될 것입니다.
+             */
+            @Override
+            public void onAudioDeviceChanged(
+                    AppRTCAudioManager.AudioDevice audioDevice, Set<AppRTCAudioManager.AudioDevice> availableAudioDevices) {
+                onAudioManagerDevicesChanged(audioDevice, availableAudioDevices);
+            }
+        });
+    }
+
+    // Should be called from UI thread
+    private void callConnected() {
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        Log.i(TAG, "Call connected: delay=" + delta + "ms");
+        if (peerConnectionClient == null || isError) {
+            Log.w(TAG, "Call is connected in closed or error state");
+            return;
+        }
+        // Enable statistics callback.
+        peerConnectionClient.enableStatsEvents(true, STAT_CALLBACK_PERIOD);
+        setSwappedFeeds(false /* isSwappedFeeds */);
+    }
+
+    // This method is called when the audio manager reports audio device change,
+    // e.g. from wired headset to speakerphone.
+    private void onAudioManagerDevicesChanged(
+            final AppRTCAudioManager.AudioDevice device, final Set<AppRTCAudioManager.AudioDevice> availableDevices) {
+        Log.d(TAG, "onAudioManagerDevicesChanged: " + availableDevices + ", "
+                + "selected: " + device);
+        // TODO(henrika): add callback handler.
+    }
+
+    /**
+     * Remote 리소스로 부터 연결해제
+     * 로컬 리소스를 삭제
+     * exit
+     */
+    private void disconnect() {
+        activityRunning = false;
+        remoteProxyRenderer.setTarget(null);
+        localProxyVideoSink.setTarget(null);
+        if (appRtcClient != null) {
+            appRtcClient.disconnectFromRoom();
+            appRtcClient = null;
+        }
+        if (pipRenderer != null) {
+            pipRenderer.release();
+            pipRenderer = null;
+        }
+        if (videoFileRenderer != null) {
+            videoFileRenderer.release();
+            videoFileRenderer = null;
+        }
+        if (fullscreenRenderer != null) {
+            fullscreenRenderer.release();
+            fullscreenRenderer = null;
+        }
+        if (peerConnectionClient != null) {
+            peerConnectionClient.close();
+            peerConnectionClient = null;
+        }
+        if (audioManager != null) {
+            audioManager.stop();
+            audioManager = null;
+        }
+        if (connected && !isError) {
+            setResult(RESULT_OK);
+        } else {
+            setResult(RESULT_CANCELED);
+        }
+        finish();
+    }
+
+    private void disconnectWithErrorMessage(final String errorMessage) {
+        if (commandLineRun || !activityRunning) {
+            Log.e(TAG, "Critical error: " + errorMessage);
+            disconnect();
+        } else {
+            new AlertDialog.Builder(this)
+                    .setTitle(getText(R.string.channel_error_title))
+                    .setMessage(errorMessage)
+                    .setCancelable(false)
+                    .setNeutralButton(R.string.ok,
+                            new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int id) {
+                                    dialog.cancel();
+                                    disconnect();
+                                }
+                            })
+                    .create()
+                    .show();
+        }
+    }
+
+    private void logAndToast(String msg) {
+        Log.d(TAG, msg);
+        if (logToast != null) {
+            logToast.cancel();
+        }
+        logToast = Toast.makeText(this, msg, Toast.LENGTH_SHORT);
+        logToast.show();
+    }
+
+    private void reportError(final String description) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (!isError) {
+                    isError = true;
+                    disconnectWithErrorMessage(description);
+                }
+            }
+        });
+    }
+
+    private @Nullable VideoCapturer createVideoCapturer() {
+        final VideoCapturer videoCapturer;
+        String videoFileAsCamera = getIntent().getStringExtra(EXTRA_VIDEO_FILE_AS_CAMERA);
+        if (videoFileAsCamera != null) {
+            try {
+                videoCapturer = new FileVideoCapturer(videoFileAsCamera);
+            } catch (IOException e) {
+                reportError("Failed to open video file for emulated camera");
+                return null;
+            }
+        } else if (screencaptureEnabled) {
+            return createScreenCapturer();
+        } else if (useCamera2()) {
+            if (!captureToTexture()) {
+                reportError(getString(R.string.camera2_texture_only_error));
+                return null;
+            }
+
+            Logging.d(TAG, "Creating capturer using camera2 API.");
+            videoCapturer = createCameraCapturer(new Camera2Enumerator(this));
+        } else {
+            Logging.d(TAG, "Creating capturer using camera1 API.");
+            videoCapturer = createCameraCapturer(new Camera1Enumerator(captureToTexture()));
+        }
+        if (videoCapturer == null) {
+            reportError("Failed to open camera");
+            return null;
+        }
+        return videoCapturer;
+    }
+
+    private void setSwappedFeeds(boolean isSwappedFeeds) {
+        Logging.d(TAG, "setSwappedFeeds: " + isSwappedFeeds);
+        this.isSwappedFeeds = isSwappedFeeds;
+        localProxyVideoSink.setTarget(isSwappedFeeds ? fullscreenRenderer : pipRenderer);
+        remoteProxyRenderer.setTarget(isSwappedFeeds ? pipRenderer : fullscreenRenderer);
+        fullscreenRenderer.setMirror(isSwappedFeeds);
+        pipRenderer.setMirror(!isSwappedFeeds);
+    }
+
+    // ----- AppRTCClient.AppRTCSignalingEvents 구현 ---------------
+    /**
+     * 모든 콜백들은 Websocket 시그널링 루퍼 스레드로부터 호출 됩니다.
+     * 그리고 UI 스레드로 라우팅 됩니다.
+     */
+    private void onConnectedToRoomInternal(final AppRTCClient.SignalingParameters params) {
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+
+        signalingParameters = params;
+        logAndToast("Creating peer connection, delay=" + delta + "ms");
+        VideoCapturer videoCapturer = null;
+        if (peerConnectionParameters.videoCallEnabled) {
+            videoCapturer = createVideoCapturer();
+        }
+        peerConnectionClient.createPeerConnection(
+                localProxyVideoSink, remoteSinks, videoCapturer, signalingParameters);
+
+        if (signalingParameters.initiator) {
+            logAndToast("Creating OFFER...");
+            // Create offer. Offer SDP will be sent to answering client in
+            // PeerConnectionEvents.onLocalDescription event.
+            peerConnectionClient.createOffer();
+        } else {
+            if (params.offerSdp != null) {
+                peerConnectionClient.setRemoteDescription(params.offerSdp);
+                logAndToast("Creating ANSWER...");
+                // Create answer. Answer SDP will be sent to offering client in
+                // PeerConnectionEvents.onLocalDescription event.
+                peerConnectionClient.createAnswer();
+            }
+            if (params.iceCandidates != null) {
+                // Add remote ICE candidates from room.
+                for (IceCandidate iceCandidate : params.iceCandidates) {
+                    peerConnectionClient.addRemoteIceCandidate(iceCandidate);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onConnectedToRoom(final AppRTCClient.SignalingParameters params) {
+        // work Thread에서 UI Thread로 동작 되게 시키는 것
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                onConnectedToRoomInternal(params);
+            }
+        });
+    }
+
+    @Override
+    public void onRemoteDescription(final SessionDescription desc) {
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (peerConnectionClient == null) {
+                    Log.e(TAG, "Received remote SDP for non-initilized peer connection.");
+                    return;
+                }
+                logAndToast("Received remote " + desc.type + ", delay=" + delta + "ms");
+                peerConnectionClient.setRemoteDescription(desc);
+                if (!signalingParameters.initiator) {
+                    logAndToast("Creating ANSWER...");
+                    // Create answer. Answer SDP will be sent to offering client in
+                    // PeerConnectionEvents.onLocalDescription event.
+                    peerConnectionClient.createAnswer();
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onRemoteIceCandidate(final IceCandidate candidate) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (peerConnectionClient == null) {
+                    Log.e(TAG, "Received ICE candidate for a non-initialized peer connection.");
+                    return;
+                }
+                peerConnectionClient.addRemoteIceCandidate(candidate);
+            }
+        });
+    }
+
+    @Override
+    public void onRemoteIceCandidatesRemoved(final IceCandidate[] candidates) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (peerConnectionClient == null) {
+                    Log.e(TAG, "Received ICE candidate removals for a non-initialized peer connection.");
+                    return;
+                }
+                peerConnectionClient.removeRemoteIceCandidates(candidates);
+            }
+        });
     }
 
     @Override
     public void onChannelClose() {
-
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("Remote end hung up; dropping PeerConnection");
+                disconnect();
+            }
+        });
     }
 
     @Override
-    public void onChannelError(String description) {
+    public void onChannelError(final String description) {
+        reportError(description);
+    }
 
+    // -----Implementation of PeerConnectionClient.PeerConnectionEvents.---------
+    // Send local peer connection SDP and ICE candidates to remote party.
+    // All callbacks are invoked from peer connection client looper thread and
+    // are routed to UI thread.
+    @Override
+    public void onLocalDescription(final SessionDescription desc) {
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (appRtcClient != null) {
+                    logAndToast("Sending " + desc.type + ", delay=" + delta + "ms");
+                    if (signalingParameters.initiator) {
+                        appRtcClient.sendOfferSdp(desc);
+                    } else {
+                        appRtcClient.sendAnswerSdp(desc);
+                    }
+                }
+                if (peerConnectionParameters.videoMaxBitrate > 0) {
+                    Log.d(TAG, "Set video maximum bitrate: " + peerConnectionParameters.videoMaxBitrate);
+                    peerConnectionClient.setVideoMaxBitrate(peerConnectionParameters.videoMaxBitrate);
+                }
+            }
+        });
     }
 
     @Override
-    public void onLocalDescription(SessionDescription sdp) {
-
+    public void onIceCandidate(final IceCandidate candidate) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (appRtcClient != null) {
+                    appRtcClient.sendLocalIceCandidate(candidate);
+                }
+            }
+        });
     }
 
     @Override
-    public void onIceCandidate(IceCandidate candidate) {
-
-    }
-
-    @Override
-    public void onIceCandidatesRemoved(IceCandidate[] candidates) {
-
+    public void onIceCandidatesRemoved(final IceCandidate[] candidates) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (appRtcClient != null) {
+                    appRtcClient.sendLocalIceCandidateRemovals(candidates);
+                }
+            }
+        });
     }
 
     @Override
     public void onIceConnected() {
-
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("ICE connected, delay=" + delta + "ms");
+            }
+        });
     }
 
     @Override
     public void onIceDisconnected() {
-
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("ICE disconnected");
+            }
+        });
     }
 
     @Override
     public void onConnected() {
-
+        final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("DTLS connected, delay=" + delta + "ms");
+                connected = true;
+                callConnected();
+            }
+        });
     }
 
     @Override
     public void onDisconnected() {
-
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("DTLS disconnected");
+                connected = false;
+                disconnect();
+            }
+        });
     }
 
     @Override
-    public void onPeerConnectionClosed() {
+    public void onPeerConnectionClosed() {}
 
+    @Override
+    public void onPeerConnectionStatsReady(final RTCStatsReport report) {
     }
 
     @Override
-    public void onPeerConnectionStatsReady(RTCStatsReport report) {
-
+    public void onPeerConnectionError(final String description) {
+        reportError(description);
     }
 
-    @Override
-    public void onPeerConnectionError(String description) {
-
-    }
 }

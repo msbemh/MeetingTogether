@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.meetingtogether"
-        minSdk 24
+        minSdk 27
         targetSdk 33
         versionCode 1
         versionName "1.0"
@@ -53,4 +53,6 @@ dependencies {
 
     // Web RTC
     implementation 'org.webrtc:google-webrtc:1.0.32006'
+
+    implementation files('libs/autobanh.jar')
 }

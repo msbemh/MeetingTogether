@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.example.meetingtogether.databinding.FragmentChattinglistBinding;
 
+
 public class ChattingListFragment extends Fragment {
 
     private FragmentChattinglistBinding binding;

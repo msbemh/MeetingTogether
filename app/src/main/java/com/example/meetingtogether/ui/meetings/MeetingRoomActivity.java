@@ -107,6 +107,7 @@ import org.webrtc.FileVideoCapturer;
 import org.webrtc.IceCandidate;
 import org.webrtc.Logging;
 import org.webrtc.MediaConstraints;
+import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RTCStatsReport;
 import org.webrtc.RendererCommon;
@@ -243,6 +244,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
 
     private List<UserModel> userList;
     private Map<String, PeerConnectionClient> PeerConnections = new HashMap();
+    private String clientId;
 
     /**
      * 필요한 권한
@@ -1129,38 +1131,63 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      * 모든 콜백들은 Websocket 시그널링 루퍼 스레드로부터 호출 됩니다.
      * 그리고 UI 스레드로 라우팅 됩니다.
      */
-    private void onConnectedToRoomInternal(final AppRTCClient.SignalingParameters params) {
+    private void onConnectedToRoomInternal() {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
 
-        signalingParameters = params;
         logAndToast("Creating peer connection, delay=" + delta + "ms");
         VideoCapturer videoCapturer = null;
         if (peerConnectionParameters.videoCallEnabled) {
             videoCapturer = createVideoCapturer();
         }
         peerConnectionClient.createPeerConnection(
-                localProxyVideoSink, remoteSinks, videoCapturer, signalingParameters);
+                localProxyVideoSink, remoteSinks, videoCapturer);
 
-        if (signalingParameters.initiator) {
-            logAndToast("Creating OFFER...");
-            // Create offer. Offer SDP will be sent to answering client in
-            // PeerConnectionEvents.onLocalDescription event.
-            peerConnectionClient.createOffer();
-        } else {
-            if (params.offerSdp != null) {
-                peerConnectionClient.setRemoteDescription(params.offerSdp);
-                logAndToast("Creating ANSWER...");
-                // Create answer. Answer SDP will be sent to offering client in
+
+
+//        if (signalingParameters.initiator) {
+//            logAndToast("Creating OFFER...");
+//            // Create offer. Offer SDP will be sent to answering client in
+//            // PeerConnectionEvents.onLocalDescription event.
+//            peerConnectionClient.createOffer();
+//        } else {
+//            if (params.offerSdp != null) {
+//                peerConnectionClient.setRemoteDescription(params.offerSdp);
+//                logAndToast("Creating ANSWER...");
+//                // Create answer. Answer SDP will be sent to offering client in
+//                // PeerConnectionEvents.onLocalDescription event.
+//                peerConnectionClient.createAnswer();
+//            }
+//            if (params.iceCandidates != null) {
+//                // Add remote ICE candidates from room.
+//                for (IceCandidate iceCandidate : params.iceCandidates) {
+//                    peerConnectionClient.addRemoteIceCandidate(iceCandidate);
+//                }
+//            }
+//        }
+    }
+
+    @Override
+    public void onPeerCreated(PeerConnection peerConnection) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                logAndToast("Creating OFFER...");
+                // Create offer. Offer SDP will be sent to answering client in
                 // PeerConnectionEvents.onLocalDescription event.
-                peerConnectionClient.createAnswer();
+                peerConnectionClient.createOffer();
             }
-            if (params.iceCandidates != null) {
-                // Add remote ICE candidates from room.
-                for (IceCandidate iceCandidate : params.iceCandidates) {
-                    peerConnectionClient.addRemoteIceCandidate(iceCandidate);
-                }
-            }
-        }
+        });
+    }
+
+    @Override
+    public void onWebSocketConnected(String clientId) {
+        this.clientId = clientId;
+        this.appRtcClient.joinRoom(roomId);
+    }
+
+    @Override
+    public void onWebSocketJoined() {
+        this.appRtcClient.sendReqUserList();
     }
 
     @Override
@@ -1173,8 +1200,11 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                 for (int i = 0; i < userList.size(); i++){
                     UserModel userModel = userList.get(i);
                     Log.d(TAG, "userModel.clientID:" + userModel.clientID);
+
                 }
+
                 Log.d(TAG, "Peer 없으면 생성시키자^^");
+                onConnectedToRoomInternal();
             }
         });
     }
@@ -1185,7 +1215,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                onConnectedToRoomInternal(params);
+//                onConnectedToRoomInternal(params);
             }
         });
     }
@@ -1255,6 +1285,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     public void onChannelError(final String description) {
         reportError(description);
     }
+
+
 
     // -----Implementation of PeerConnectionClient.PeerConnectionEvents.---------
     // Send local peer connection SDP and ICE candidates to remote party.

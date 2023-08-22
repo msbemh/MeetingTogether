@@ -48,6 +48,7 @@ import org.webrtc.EglBase;
 import org.webrtc.FileVideoCapturer;
 import org.webrtc.IceCandidate;
 import org.webrtc.Logging;
+import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RTCStatsReport;
 import org.webrtc.RendererCommon.ScalingType;
@@ -873,7 +874,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
       videoCapturer = createVideoCapturer();
     }
     peerConnectionClient.createPeerConnection(
-        localProxyVideoSink, remoteSinks, videoCapturer, signalingParameters);
+        localProxyVideoSink, remoteSinks, videoCapturer);
 
     if (signalingParameters.initiator) {
       logAndToast("Creating OFFER...");
@@ -895,6 +896,16 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
         }
       }
     }
+  }
+
+  @Override
+  public void onWebSocketJoined() {
+
+  }
+
+  @Override
+  public void onWebSocketConnected(String clientId) {
+
   }
 
   @Override
@@ -977,6 +988,11 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
   @Override
   public void onChannelError(final String description) {
     reportError(description);
+  }
+
+  @Override
+  public void onPeerCreated(PeerConnection peerConnection) {
+
   }
 
   // -----Implementation of PeerConnectionClient.PeerConnectionEvents.---------

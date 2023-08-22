@@ -42,6 +42,10 @@ public interface AppRTCClient {
     }
   }
 
+  void joinRoom(String roomId);
+
+  void sendReqUserList();
+
   /**
    * Asynchronously connect to an AppRTC room URL using supplied connection
    * parameters. Once connection is established onConnectedToRoom()
@@ -105,6 +109,8 @@ public interface AppRTCClient {
    * <p>Methods are guaranteed to be invoked on the UI thread of `activity`.
    */
   interface SignalingEvents {
+    void onWebSocketJoined();
+    void onWebSocketConnected(final String clientId);
     void onUserList(final List<UserModel> userList);
     /**
      * Callback fired once the room's signaling parameters

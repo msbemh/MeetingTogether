@@ -163,6 +163,8 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
   // Callback issued when room parameters are extracted. Runs on local
   // looper thread.
 
+
+
   /**
    * Room 파라미터가 추출 되었을 때, 콜백이 호출 됩니다.
    * local looper thread 위에서 동작 됩니다.
@@ -192,6 +194,30 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 ////    wsClient.connect(signalingParameters.wssUrl, signalingParameters.wssPostUrl);
 ////    wsClient.register(connectionParameters.roomId, signalingParameters.clientId);
 //  }
+  @Override
+  public void joinRoom(String roomId) {
+    handler.post(new Runnable() {
+      @Override
+      public void run() {
+        JSONObject json = new JSONObject();
+        jsonPut(json, "type", "join");
+        jsonPut(json, "roomId", roomId);
+        wsClient.send(json.toString());
+      }
+    });
+  }
+
+  @Override
+  public void sendReqUserList() {
+    handler.post(new Runnable() {
+      @Override
+      public void run() {
+        JSONObject json = new JSONObject();
+        jsonPut(json, "type", "userList");
+        wsClient.send(json.toString());
+      }
+    });
+  }
 
   // Send local offer SDP to the other participant.
   @Override
@@ -318,7 +344,11 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         json = new JSONObject(msgText);
         String type = json.optString("type");
 
-        if(type.equals("userList")){
+        // type : joined
+        if(type.equals("joined")){
+          events.onWebSocketJoined();
+        // type : userList
+        }else if(type.equals("userList")){
 
           List<UserModel> userList = new ArrayList<UserModel>();
           JSONArray jsonArray = json.getJSONArray("userList");
@@ -332,9 +362,13 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
           }
 
           events.onUserList(userList);
-        }
+        // type : connected
+        } else if (type.equals("connected")) {
+          String receiveClientId = json.optString("clientId");
+          events.onWebSocketConnected(receiveClientId);
+
         // type : candidate
-        else if (type.equals("candidate")) {
+        } else if (type.equals("candidate")) {
           events.onRemoteIceCandidate(toJavaCandidate(json));
 
         // type : remove-candidates

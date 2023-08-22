@@ -104,24 +104,32 @@ public class WebSocketChannelClient {
       ws.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
             @Override
             public void call(Object... args) {
-//              String message = args[0].toString();
-
               Log.d(TAG, "WebSocket connection opened to: " + wsServerUrl);
-//              Log.d(TAG, "message: " + message);
+              state = WebSocketConnectionState.CONNECTED;
 
-              /**
-               * 웹소켓 연결 완료
-               */
-              handler.post(new Runnable() {
-                @Override
-                public void run() {
-                  state = WebSocketConnectionState.REGISTERED;
-                }
-              });
               // 연결 성공 시 실행되는 코드
-              Log.d("TEST", "소켓 연결");
-              ws.emit("join", roomId);
+//              Log.d("TEST", "소켓 연결");
+//              ws.emit("join", roomId);
             }
+        }).on("joined", new Emitter.Listener() {
+          @Override
+          public void call(Object... args) {
+            Log.d("TEST", "joined");
+            state = WebSocketConnectionState.REGISTERED;
+
+            String message = args[0].toString();
+            Log.d(TAG, "WSS->C: " + message);
+
+            handler.post(new Runnable() {
+              @Override
+              public void run() {
+                if (state == WebSocketConnectionState.CONNECTED
+                        || state == WebSocketConnectionState.REGISTERED) {
+                  events.onWebSocketMessage(message);
+                }
+              }
+            });
+          }
         }).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
             @Override
             public void call(Object... args) {

@@ -179,6 +179,7 @@ public class PeerConnectionClient {
   private DataChannel dataChannel;
   private final boolean dataChannelEnabled;
 
+
   /**
    * Peer connection parameters.
    */
@@ -264,6 +265,8 @@ public class PeerConnectionClient {
    * Peer connection events.
    */
   public interface PeerConnectionEvents {
+    void onPeerCreated(PeerConnection peerConnection);
+
     /**
      * Callback fired once local SDP is created and set.
      */
@@ -354,17 +357,17 @@ public class PeerConnectionClient {
     executor.execute(() -> createPeerConnectionFactoryInternal(options));
   }
 
-  public void createPeerConnection(final VideoSink localRender, final VideoSink remoteSink,
-      final VideoCapturer videoCapturer, final AppRTCClient.SignalingParameters signalingParameters) {
-    if (peerConnectionParameters.videoCallEnabled && videoCapturer == null) {
-      Log.w(TAG, "Video call enabled but no video capturer provided.");
-    }
-    createPeerConnection(
-        localRender, Collections.singletonList(remoteSink), videoCapturer, signalingParameters);
-  }
+//  public void createPeerConnection(final VideoSink localRender, final VideoSink remoteSink,
+//      final VideoCapturer videoCapturer) {
+//    if (peerConnectionParameters.videoCallEnabled && videoCapturer == null) {
+//      Log.w(TAG, "Video call enabled but no video capturer provided.");
+//    }
+//    createPeerConnection(
+//        localRender, Collections.singletonList(remoteSink), videoCapturer);
+//  }
 
   public void createPeerConnection(final VideoSink localRender, final List<VideoSink> remoteSinks,
-      final VideoCapturer videoCapturer, final AppRTCClient.SignalingParameters signalingParameters) {
+      final VideoCapturer videoCapturer) {
     if (peerConnectionParameters == null) {
       Log.e(TAG, "Creating peer connection without initializing factory.");
       return;
@@ -372,7 +375,6 @@ public class PeerConnectionClient {
     this.localRender = localRender;
     this.remoteSinks = remoteSinks;
     this.videoCapturer = videoCapturer;
-    this.signalingParameters = signalingParameters;
     executor.execute(() -> {
       try {
         createMediaConstraintsInternal();
@@ -668,6 +670,8 @@ public class PeerConnectionClient {
 //      }
 //    }
     Log.d(TAG, "Peer connection created.");
+
+    this.events.onPeerCreated(peerConnection);
   }
 
   private File createRtcEventLogOutputFile() {

@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 
 import com.example.meetingtogether.common.Constants;
 import com.example.meetingtogether.ui.meetings.RoomParametersFetcher;
+import com.example.meetingtogether.ui.meetings.UserModel;
 import com.example.meetingtogether.ui.meetings.google.util.AsyncHttpURLConnection;
 
 import org.json.JSONArray;
@@ -25,6 +26,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.IceCandidate;
 import org.webrtc.SessionDescription;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Negotiates signaling for chatting with https://apprtc.webrtcserver.cn/ "rooms".
@@ -54,10 +58,12 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
   private RoomConnectionParameters connectionParameters;
   private String messageUrl;
   private String leaveUrl;
+  private String roomId;
 
-  public WebSocketRTCClient(SignalingEvents events) {
+  public WebSocketRTCClient(SignalingEvents events, String roomId) {
     this.events = events;
     roomState = ConnectionState.NEW;
+    this.roomId = roomId;
 
     /**
      * 이곳에서의 handler는 백그라운드 작업을 위해서 새로운 HandlerThread를 생성합니다.
@@ -107,7 +113,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
     roomState = ConnectionState.NEW;
 
-    wsClient = new WebSocketChannelClient(handler, this);
+    wsClient = new WebSocketChannelClient(handler, this, roomId);
 
     roomState = ConnectionState.CONNECTED;
 
@@ -312,8 +318,23 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         json = new JSONObject(msgText);
         String type = json.optString("type");
 
+        if(type.equals("userList")){
+
+          List<UserModel> userList = new ArrayList<UserModel>();
+          JSONArray jsonArray = json.getJSONArray("userList");
+
+          for (int i = 0; i < jsonArray.length(); i++){
+            JSONObject obj = jsonArray.getJSONObject(i);
+            Log.d(TAG, "obj:"+obj);
+            UserModel userModel = new UserModel(obj.getString("clientID"));
+
+            userList.add(userModel);
+          }
+
+          events.onUserList(userList);
+        }
         // type : candidate
-        if (type.equals("candidate")) {
+        else if (type.equals("candidate")) {
           events.onRemoteIceCandidate(toJavaCandidate(json));
 
         // type : remove-candidates

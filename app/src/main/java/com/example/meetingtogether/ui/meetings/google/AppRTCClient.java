@@ -10,6 +10,8 @@
 
 package com.example.meetingtogether.ui.meetings.google;
 
+import com.example.meetingtogether.ui.meetings.UserModel;
+
 import org.webrtc.IceCandidate;
 import org.webrtc.PeerConnection;
 import org.webrtc.SessionDescription;
@@ -103,6 +105,7 @@ public interface AppRTCClient {
    * <p>Methods are guaranteed to be invoked on the UI thread of `activity`.
    */
   interface SignalingEvents {
+    void onUserList(final List<UserModel> userList);
     /**
      * Callback fired once the room's signaling parameters
      * SignalingParameters are extracted.

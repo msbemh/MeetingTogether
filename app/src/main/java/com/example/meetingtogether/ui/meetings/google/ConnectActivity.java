@@ -396,9 +396,9 @@ public class ConnectActivity extends Activity {
     }
 
     String roomUrl = sharedPref.getString(
-        keyprefRoomServerUrl, getString(R.string.pref_room_server_url_default));
+        keyprefRoomServerUrl, getString(R.string.pref_room_server_url_custom));
 
-    roomUrl = getString(R.string.pref_room_server_url_default);
+    roomUrl = getString(R.string.pref_room_server_url_custom);
 
     // Video call enabled flag.
     boolean videoCallEnabled = sharedPrefGetBoolean(R.string.pref_videocall_key,

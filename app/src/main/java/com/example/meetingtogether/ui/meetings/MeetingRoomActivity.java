@@ -131,6 +131,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -167,8 +168,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     private ActivityMeetingRoomBinding binding;
-
-    private Socket mSocket;
 
     private String roomId;
 
@@ -242,6 +241,9 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     // Controls
     private CpuMonitor cpuMonitor;
 
+    private List<UserModel> userList;
+    private Map<String, PeerConnectionClient> PeerConnections = new HashMap();
+
     /**
      * 필요한 권한
      */
@@ -312,7 +314,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         binding.sendBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mSocket.emit("message", "helloWorld");
+//                mSocket.emit("message", "helloWorld");
             }
         });
 
@@ -481,7 +483,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
          * 그렇지 않을 경우엔 표준 WebSocketRTCClient를 이용합니다.
          */
         if (loopback || !DirectRTCClient.IP_PATTERN.matcher(roomId).matches()) {
-            appRtcClient = new WebSocketRTCClient(this);
+            appRtcClient = new WebSocketRTCClient(this, roomId);
         } else {
             Log.i(TAG, "Using DirectRTCClient because room name looks like an IP.");
             appRtcClient = new DirectRTCClient(this);
@@ -888,6 +890,17 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+//        String room = roomEditText.getText().toString();
+//        String roomListJson = new JSONArray(roomList).toString();
+//        SharedPreferences.Editor editor = sharedPref.edit();
+//        editor.putString(keyprefRoom, room);
+//        editor.putString(keyprefRoomList, roomListJson);
+//        editor.commit();
+    }
+
+    @Override
     protected void onDestroy() {
         Thread.setDefaultUncaughtExceptionHandler(null);
         disconnect();
@@ -895,10 +908,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             logToast.cancel();
         }
         activityRunning = false;
-
-        mSocket.disconnect();
-        mSocket = null;
-
         super.onDestroy();
     }
 
@@ -1152,6 +1161,22 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                 }
             }
         }
+    }
+
+    @Override
+    public void onUserList(List<UserModel> userList) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                MeetingRoomActivity.this.userList = userList;
+                // 이곳에서 User ClientID에 대한 Peer가 없다면, 생성시킨다.
+                for (int i = 0; i < userList.size(); i++){
+                    UserModel userModel = userList.get(i);
+                    Log.d(TAG, "userModel.clientID:" + userModel.clientID);
+                }
+                Log.d(TAG, "Peer 없으면 생성시키자^^");
+            }
+        });
     }
 
     @Override

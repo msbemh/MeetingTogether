@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 
 import com.example.meetingtogether.ui.meetings.google.util.AsyncHttpURLConnection;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -26,9 +27,6 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
-import de.tavendo.autobahn.WebSocket.WebSocketConnectionObserver;
-import de.tavendo.autobahn.WebSocketConnection;
-import de.tavendo.autobahn.WebSocketException;
 import io.socket.client.IO;
 import io.socket.client.Socket;
 import io.socket.emitter.Emitter;
@@ -49,7 +47,7 @@ public class WebSocketChannelClient {
   private String wsServerUrl;
   private String postServerUrl;
   @Nullable
-  private String roomID;
+  private String roomId;
   @Nullable
   private String clientID;
   private WebSocketConnectionState state;
@@ -74,10 +72,10 @@ public class WebSocketChannelClient {
     void onWebSocketError(final String description);
   }
 
-  public WebSocketChannelClient(Handler handler, WebSocketChannelEvents events) {
+  public WebSocketChannelClient(Handler handler, WebSocketChannelEvents events, String roomId) {
     this.handler = handler;
     this.events = events;
-    roomID = null;
+    this.roomId = roomId;
     clientID = null;
     state = WebSocketConnectionState.NEW;
   }
@@ -106,10 +104,10 @@ public class WebSocketChannelClient {
       ws.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
             @Override
             public void call(Object... args) {
-              String message = args[0].toString();
+//              String message = args[0].toString();
 
               Log.d(TAG, "WebSocket connection opened to: " + wsServerUrl);
-              Log.d(TAG, "message: " + message);
+//              Log.d(TAG, "message: " + message);
 
               /**
                * 웹소켓 연결 완료
@@ -117,12 +115,12 @@ public class WebSocketChannelClient {
               handler.post(new Runnable() {
                 @Override
                 public void run() {
-                  state = WebSocketConnectionState.CONNECTED;
+                  state = WebSocketConnectionState.REGISTERED;
                 }
               });
-                // 연결 성공 시 실행되는 코드
-//                Log.d("TEST", "소켓 연결");
-//                mSocket.emit("join", roomId);
+              // 연결 성공 시 실행되는 코드
+              Log.d("TEST", "소켓 연결");
+              ws.emit("join", roomId);
             }
         }).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
             @Override
@@ -152,8 +150,25 @@ public class WebSocketChannelClient {
         }).on("message", new Emitter.Listener() {
             @Override
             public void call(Object... args) {
-              final String message = args[0].toString();
+              String message = args[0].toString();
               Log.d(TAG, "WSS->C: " + message);
+
+              String type = "";
+              try{
+                JSONObject json = new JSONObject(message);
+                String msgText = json.getString("msg");
+                String errorText = json.optString("error");
+
+                type = json.getString(msgText);
+
+              }catch (Exception e){
+                e.printStackTrace();
+                Log.d(TAG, e.getMessage());
+              }
+
+              if("userList".equals(type)){
+                state = WebSocketConnectionState.REGISTERED;
+              }
 
               /**
                * 메시지를 받습니다.

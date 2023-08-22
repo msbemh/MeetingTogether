@@ -176,8 +176,10 @@ public class MeetingListFragment extends Fragment {
 //        String roomUrl = sharedPref.getString(
 //                keyprefRoomServerUrl, getString(R.string.pref_room_server_url_default));
 
-        String roomUrl = sharedPref.getString(
-                keyprefRoomServerUrl, getString(R.string.pref_room_server_url_custom));
+//        String roomUrl = sharedPref.getString(
+//                keyprefRoomServerUrl, getString(R.string.pref_room_server_url_custom));
+
+        String roomUrl = getString(R.string.pref_room_server_url_custom);
 
         // Video call enabled flag.
         boolean videoCallEnabled = sharedPrefGetBoolean(R.string.pref_videocall_key,
@@ -357,7 +359,7 @@ public class MeetingListFragment extends Fragment {
         Log.d(TAG, "Connecting to room " + roomId + " at URL " + roomUrl);
         if (validateUrl(roomUrl)) {
             Uri uri = Uri.parse(roomUrl);
-            Intent intent = new Intent(getActivity(), CallActivity.class);
+            Intent intent = new Intent(getActivity(), MeetingRoomActivity.class);
             intent.setData(uri);
             intent.putExtra(CallActivity.EXTRA_ROOMID, roomId);
             intent.putExtra(CallActivity.EXTRA_LOOPBACK, loopback);

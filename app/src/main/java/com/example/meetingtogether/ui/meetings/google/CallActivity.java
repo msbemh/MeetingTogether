@@ -33,6 +33,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 
 import com.example.meetingtogether.R;
+import com.example.meetingtogether.ui.meetings.UserModel;
 import com.example.meetingtogether.ui.meetings.google.AppRTCAudioManager.AudioDevice;
 import com.example.meetingtogether.ui.meetings.google.AppRTCAudioManager.AudioManagerEvents;
 import com.example.meetingtogether.ui.meetings.google.AppRTCClient.RoomConnectionParameters;
@@ -423,7 +424,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
      * 그렇지 않을 경우엔 표준 WebSocketRTCClient를 이용합니다.
      */
     if (loopback || !DirectRTCClient.IP_PATTERN.matcher(roomId).matches()) {
-      appRtcClient = new WebSocketRTCClient(this);
+      appRtcClient = new WebSocketRTCClient(this, roomId);
     } else {
       Log.i(TAG, "Using DirectRTCClient because room name looks like an IP.");
       appRtcClient = new DirectRTCClient(this);
@@ -894,6 +895,11 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
         }
       }
     }
+  }
+
+  @Override
+  public void onUserList(List<UserModel> userList) {
+
   }
 
   @Override

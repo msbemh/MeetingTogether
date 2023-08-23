@@ -160,7 +160,7 @@ public class DirectRTCClient implements AppRTCClient, TCPChannelClient.TCPChanne
   }
 
   @Override
-  public void sendOfferSdp(final SessionDescription sdp) {
+  public void sendOfferSdp(final SessionDescription sdp, String senderId, String targetId) {
     executor.execute(new Runnable() {
       @Override
       public void run() {
@@ -177,7 +177,7 @@ public class DirectRTCClient implements AppRTCClient, TCPChannelClient.TCPChanne
   }
 
   @Override
-  public void sendAnswerSdp(final SessionDescription sdp) {
+  public void sendAnswerSdp(final SessionDescription sdp, String senderId, String targetId) {
     executor.execute(new Runnable() {
       @Override
       public void run() {
@@ -274,7 +274,7 @@ public class DirectRTCClient implements AppRTCClient, TCPChannelClient.TCPChanne
       } else if (type.equals("answer")) {
         SessionDescription sdp = new SessionDescription(
             SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
-        events.onRemoteDescription(sdp);
+        events.onRemoteDescription(sdp, "", "");
       } else if (type.equals("offer")) {
         SessionDescription sdp = new SessionDescription(
             SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));

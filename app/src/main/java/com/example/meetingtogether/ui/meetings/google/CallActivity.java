@@ -79,8 +79,7 @@ import java.util.Set;
  * 특정 method에 대하여 override를 통해 프래그먼트에 있는 view의 동작을 조작
  */
 public class CallActivity extends Activity implements AppRTCClient.SignalingEvents,
-        PeerConnectionClient.PeerConnectionEvents,
-                                                      CallFragment.OnCallEvents {
+        PeerConnectionClient.PeerConnectionEvents, CallFragment.OnCallEvents {
   private static final String TAG = "TEST";
 
   public static final String EXTRA_ROOMID = " com.example.meetingtogether.ROOMID";
@@ -874,13 +873,13 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
       videoCapturer = createVideoCapturer();
     }
     peerConnectionClient.createPeerConnection(
-        localProxyVideoSink, remoteSinks, videoCapturer, false);
+        localProxyVideoSink, remoteSinks, videoCapturer, false, "");
 
     if (signalingParameters.initiator) {
       logAndToast("Creating OFFER...");
       // Create offer. Offer SDP will be sent to answering client in
       // PeerConnectionEvents.onLocalDescription event.
-      peerConnectionClient.createOffer();
+      peerConnectionClient.createOffer("", "");
     } else {
       if (params.offerSdp != null) {
         peerConnectionClient.setRemoteDescription(params.offerSdp);
@@ -925,7 +924,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
   }
 
   @Override
-  public void onRemoteDescription(final SessionDescription desc) {
+  public void onRemoteDescription(final SessionDescription desc, String senderId, String targetId) {
     final long delta = System.currentTimeMillis() - callStartedTimeMs;
     runOnUiThread(new Runnable() {
       @Override
@@ -990,8 +989,9 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
     reportError(description);
   }
 
+
   @Override
-  public void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator) {
+  public void onPeerCreated(PeerConnectionClient peerConnectionClient, PeerConnection peerConnection, Boolean isInitiator, String clientId) {
 
   }
 
@@ -1000,7 +1000,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
   // All callbacks are invoked from peer connection client looper thread and
   // are routed to UI thread.
   @Override
-  public void onLocalDescription(final SessionDescription desc) {
+  public void onLocalDescription(final SessionDescription desc, boolean isInitiator, String senderId, String targetId) {
     final long delta = System.currentTimeMillis() - callStartedTimeMs;
     runOnUiThread(new Runnable() {
       @Override
@@ -1008,9 +1008,9 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
         if (appRtcClient != null) {
           logAndToast("Sending " + desc.type + ", delay=" + delta + "ms");
           if (signalingParameters.initiator) {
-            appRtcClient.sendOfferSdp(desc);
+            appRtcClient.sendOfferSdp(desc, "", "");
           } else {
-            appRtcClient.sendAnswerSdp(desc);
+            appRtcClient.sendAnswerSdp(desc, "", "");
           }
         }
         if (peerConnectionParameters.videoMaxBitrate > 0) {

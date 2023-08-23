@@ -133,6 +133,9 @@ public class PeerConnectionClient {
   private final Context appContext;
   private final PeerConnectionParameters peerConnectionParameters;
   private final PeerConnectionEvents events;
+  private String peerClientId;
+  private String senderId;
+  private String targetId;
 
   @Nullable
   private PeerConnectionFactory factory;
@@ -265,12 +268,12 @@ public class PeerConnectionClient {
    * Peer connection events.
    */
   public interface PeerConnectionEvents {
-    void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator);
+    void onPeerCreated(PeerConnectionClient peerConnectionClient, PeerConnection peerConnection, Boolean isInitiator, String clientId);
 
     /**
      * Callback fired once local SDP is created and set.
      */
-    void onLocalDescription(final SessionDescription sdp);
+    void onLocalDescription(final SessionDescription sdp, boolean isInitiator, String senderId, String targetId);
 
     /**
      * Callback fired once local Ice candidate is generated.
@@ -367,7 +370,7 @@ public class PeerConnectionClient {
 //  }
 
   public void createPeerConnection(final VideoSink localRender, final List<VideoSink> remoteSinks,
-      final VideoCapturer videoCapturer, Boolean isInitiator) {
+      final VideoCapturer videoCapturer, Boolean isInitiator, String peerClientId) {
     if (peerConnectionParameters == null) {
       Log.e(TAG, "Creating peer connection without initializing factory.");
       return;
@@ -376,10 +379,11 @@ public class PeerConnectionClient {
     this.remoteSinks = remoteSinks;
     this.videoCapturer = videoCapturer;
     this.isInitiator = isInitiator;
+    this.peerClientId = peerClientId;
     executor.execute(() -> {
       try {
         createMediaConstraintsInternal();
-        createPeerConnectionInternal(isInitiator);
+        createPeerConnectionInternal(isInitiator, peerClientId);
         maybeCreateAndStartRtcEventLog();
       } catch (Exception e) {
         reportError("Failed to create peer connection: " + e.getMessage());
@@ -588,7 +592,7 @@ public class PeerConnectionClient {
         "OfferToReceiveVideo", Boolean.toString(isVideoCallEnabled())));
   }
 
-  private void createPeerConnectionInternal(Boolean isInitiator) {
+  private void createPeerConnectionInternal(Boolean isInitiator, String peerClientId) {
     if (factory == null || isError) {
       Log.e(TAG, "Peerconnection factory is not created");
       return;
@@ -671,7 +675,7 @@ public class PeerConnectionClient {
 //    }
     Log.d(TAG, "Peer connection created.");
 
-    this.events.onPeerCreated(peerConnection, isInitiator);
+    this.events.onPeerCreated(this, peerConnection, isInitiator, peerClientId);
   }
 
   private File createRtcEventLogOutputFile() {
@@ -811,11 +815,13 @@ public class PeerConnectionClient {
     });
   }
 
-  public void createOffer() {
+  public void createOffer(String senderId, String targetId) {
     executor.execute(() -> {
       if (peerConnection != null && !isError) {
         Log.d(TAG, "PC Create OFFER");
         this.isInitiator = true;
+        this.senderId = senderId;
+        this.targetId = targetId;
         peerConnection.createOffer(sdpObserver, sdpMediaConstraints);
       }
     });
@@ -1357,7 +1363,7 @@ public class PeerConnectionClient {
           if (peerConnection.getRemoteDescription() == null) {
             // We've just set our local SDP so time to send it.
             Log.d(TAG, "Local SDP set succesfully");
-            events.onLocalDescription(localDescription);
+            events.onLocalDescription(localDescription, PeerConnectionClient.this.isInitiator, PeerConnectionClient.this.senderId, PeerConnectionClient.this.targetId);
           } else {
             // We've just set remote description, so drain remote
             // and send local ICE candidates.
@@ -1371,7 +1377,7 @@ public class PeerConnectionClient {
             // We've just set our local SDP so time to send it, drain
             // remote and send local ICE candidates.
             Log.d(TAG, "Local SDP set succesfully");
-            events.onLocalDescription(localDescription);
+            events.onLocalDescription(localDescription, PeerConnectionClient.this.isInitiator, PeerConnectionClient.this.senderId, PeerConnectionClient.this.targetId);
             drainCandidates();
           } else {
             // We've just set remote SDP - do nothing for now -

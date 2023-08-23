@@ -221,7 +221,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
   // Send local offer SDP to the other participant.
   @Override
-  public void sendOfferSdp(final SessionDescription sdp) {
+  public void sendOfferSdp(final SessionDescription sdp, String senderId, String targetId) {
     handler.post(new Runnable() {
       @Override
       public void run() {
@@ -232,20 +232,23 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         JSONObject json = new JSONObject();
         jsonPut(json, "sdp", sdp.description);
         jsonPut(json, "type", "offer");
+        jsonPut(json, "senderId", senderId);
+        jsonPut(json, "targetId", targetId);
+        wsClient.send(json.toString());
 //        sendPostMessage(MessageType.MESSAGE, messageUrl, json.toString());
-        if (connectionParameters.loopback) {
-          // In loopback mode rename this offer to answer and route it back.
-          SessionDescription sdpAnswer = new SessionDescription(
-              SessionDescription.Type.fromCanonicalForm("answer"), sdp.description);
-          events.onRemoteDescription(sdpAnswer);
-        }
+//        if (connectionParameters.loopback) {
+//          // In loopback mode rename this offer to answer and route it back.
+//          SessionDescription sdpAnswer = new SessionDescription(
+//              SessionDescription.Type.fromCanonicalForm("answer"), sdp.description);
+//          events.onRemoteDescription(sdpAnswer);
+//        }
       }
     });
   }
 
   // Send local answer SDP to the other participant.
   @Override
-  public void sendAnswerSdp(final SessionDescription sdp) {
+  public void sendAnswerSdp(final SessionDescription sdp, String senderId, String targetId) {
     handler.post(new Runnable() {
       @Override
       public void run() {
@@ -256,6 +259,8 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         JSONObject json = new JSONObject();
         jsonPut(json, "sdp", sdp.description);
         jsonPut(json, "type", "answer");
+        jsonPut(json, "senderId", senderId);
+        jsonPut(json, "targetId", targetId);
         wsClient.send(json.toString());
       }
     });
@@ -328,8 +333,6 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
   @Override
   public void onWebSocketMessage(final String msg) {
 
-
-
     try {
       JSONObject json = new JSONObject(msg);
       String msgText = json.getString("msg");
@@ -337,6 +340,10 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
       if (msgText.length() > 0) {
         json = new JSONObject(msgText);
         String type = json.optString("type");
+        String senderId = null;
+        String targetId = null;
+        if(json.getString("senderId") != null) senderId = json.getString("senderId");
+        if(json.getString("targetId") != null) targetId = json.getString("targetId");
 
         /**
          * 웹소켓 연결 확인
@@ -386,23 +393,15 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
         // type : answer
         } else if (type.equals("answer")) {
-          if (initiator) {
-            SessionDescription sdp = new SessionDescription(
-                SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
-            events.onRemoteDescription(sdp);
-          } else {
-            reportError("Received answer for call initiator: " + msg);
-          }
+          SessionDescription sdp = new SessionDescription(
+                  SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
+          events.onRemoteDescription(sdp, senderId, targetId);
 
         // type : offer
         } else if (type.equals("offer")) {
-          if (!initiator) {
-            SessionDescription sdp = new SessionDescription(
-                SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
-            events.onRemoteDescription(sdp);
-          } else {
-            reportError("Received offer for call receiver: " + msg);
-          }
+          SessionDescription sdp = new SessionDescription(
+                  SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
+          events.onRemoteDescription(sdp, senderId, targetId);
 
         // type : bye
         } else if (type.equals("bye")) {

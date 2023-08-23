@@ -133,6 +133,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -675,11 +676,11 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
 //                        JSONArray jsonArray = (JSONArray) jsonObject.get("userList");
 //                        for (int i = 0; i < jsonArray.length(); i++){
 //                            JSONObject userObj = new JSONObject(jsonArray.get(i).toString());
-//                            String clientID = userObj.get("clientID").toString();
+//                            String clientId = userObj.get("clientId").toString();
 //                            Log.d("TEST", "userObj:"+userObj);
-//                            Log.d("TEST", "clientID:"+clientID);
+//                            Log.d("TEST", "clientId:"+clientId);
 //
-//                            userModelList.add(new UserModel(clientID));
+//                            userModelList.add(new UserModel(clientId));
 //                        }
 //                        // 유저 리스트 로그
 //                        showUserList();
@@ -1131,7 +1132,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      * 모든 콜백들은 Websocket 시그널링 루퍼 스레드로부터 호출 됩니다.
      * 그리고 UI 스레드로 라우팅 됩니다.
      */
-    private void onConnectedToRoomInternal(Boolean isInitiator) {
+    private void onConnectedToRoomInternal(Boolean isInitiator, String peerClientId) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
 
         logAndToast("Creating peer connection, delay=" + delta + "ms");
@@ -1140,7 +1141,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             videoCapturer = createVideoCapturer();
         }
         peerConnectionClient.createPeerConnection(
-                localProxyVideoSink, remoteSinks, videoCapturer, isInitiator);
+                localProxyVideoSink, remoteSinks, videoCapturer, isInitiator, peerClientId);
 
 
 
@@ -1167,15 +1168,23 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator) {
+    public void onPeerCreated(PeerConnectionClient peerConnectionClient, PeerConnection peerConnection, Boolean isInitiator, String peerClientId) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                /**
+                 * 피어 생성되면
+                 * Map<String, PeerConnectionClient> PeerConnections 에서 관리 한다.
+                 */
+                if(PeerConnections.get(peerClientId) == null){
+                    PeerConnections.put(peerClientId, peerConnectionClient);
+                }
+
                 if(isInitiator){
                     logAndToast("Creating OFFER...");
                     // Create offer. Offer SDP will be sent to answering client in
                     // PeerConnectionEvents.onLocalDescription event.
-                    peerConnectionClient.createOffer();
+                    peerConnectionClient.createOffer(clientId, peerClientId);
                 }else{
                     logAndToast("Creating ANSWER...");
                     peerConnectionClient.createAnswer();
@@ -1204,21 +1213,42 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                 // 이곳에서 User ClientID에 대한 Peer가 없다면, 생성시킨다.
                 for (int i = 0; i < userList.size(); i++){
                     UserModel userModel = userList.get(i);
-                    Log.d(TAG, "userModel.clientID:" + userModel.clientID);
+                    String peerClientId = userModel.clientId;
+                    Log.d(TAG, "peerClientId:" + peerClientId);
 
                     // 자기 자신은 제외 시키자
-                    if(userModel.clientID.equals(clientId)){
+                    if(userModel.clientId.equals(clientId)){
                        continue;
                     }
 
-                    // initiator만 피어를 생성 시키고 offer를 전송 시키자.
-                    if(userModel.clientID.equals(initiator)){
-                        Log.d(TAG, "Peer 생성시키자^^");
-                        onConnectedToRoomInternal(true);
+                    /**
+                     * Socket ClientId 와 Initiator 가 같을 경우에만
+                     * 존재하지 않는 피어들을 생성 시키자.
+                     */
+                    if(userModel.clientId.equals(initiator)){
+                        // peer가 존재하지 않을 경우 생성
+                        if(!checkExistPeer(peerClientId)){
+                            Log.d(TAG, "Peer 생성시키자^^");
+                            onConnectedToRoomInternal(true, peerClientId);
+                        }
+
                     }
                 }
             }
         });
+    }
+
+    private boolean checkExistPeer(String clientId){
+        Iterator<String> keys = PeerConnections.keySet().iterator();
+        boolean isExist = false;
+        while(keys.hasNext()){
+            String keyClientId = keys.next();
+            if(clientId.equals(keyClientId)){
+                isExist = true;
+                return isExist;
+            }
+        }
+        return isExist;
     }
 
     @Override
@@ -1232,8 +1262,9 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         });
     }
 
+
     @Override
-    public void onRemoteDescription(final SessionDescription desc) {
+    public void onRemoteDescription(final SessionDescription desc, String senderId, String targetId) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
         runOnUiThread(new Runnable() {
             @Override
@@ -1305,17 +1336,17 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     // All callbacks are invoked from peer connection client looper thread and
     // are routed to UI thread.
     @Override
-    public void onLocalDescription(final SessionDescription desc) {
+    public void onLocalDescription(final SessionDescription desc, boolean isInitiator, String senderId, String targetId) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 if (appRtcClient != null) {
                     logAndToast("Sending " + desc.type + ", delay=" + delta + "ms");
-                    if (signalingParameters.initiator) {
-                        appRtcClient.sendOfferSdp(desc);
+                    if (isInitiator) {
+                        appRtcClient.sendOfferSdp(desc, senderId, targetId);
                     } else {
-                        appRtcClient.sendAnswerSdp(desc);
+                        appRtcClient.sendAnswerSdp(desc, senderId, targetId);
                     }
                 }
                 if (peerConnectionParameters.videoMaxBitrate > 0) {

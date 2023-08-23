@@ -56,12 +56,12 @@ public interface AppRTCClient {
   /**
    * Send offer SDP to the other participant.
    */
-  void sendOfferSdp(final SessionDescription sdp);
+  void sendOfferSdp(final SessionDescription sdp, String senderId, String targetId);
 
   /**
    * Send answer SDP to the other participant.
    */
-  void sendAnswerSdp(final SessionDescription sdp);
+  void sendAnswerSdp(final SessionDescription sdp, String senderId, String targetId);
 
   /**
    * Send Ice candidate to the other participant.
@@ -121,7 +121,7 @@ public interface AppRTCClient {
     /**
      * Callback fired once remote SDP is received.
      */
-    void onRemoteDescription(final SessionDescription sdp);
+    void onRemoteDescription(final SessionDescription sdp, String senderId, String targetId);
 
     /**
      * Callback fired once remote Ice candidate is received.

@@ -174,9 +174,9 @@ public class WebSocketChannelClient {
                 Log.d(TAG, e.getMessage());
               }
 
-              if("userList".equals(type)){
-                state = WebSocketConnectionState.REGISTERED;
-              }
+//              if("userList".equals(type)){
+//                state = WebSocketConnectionState.REGISTERED;
+//              }
 
               /**
                * 메시지를 받습니다.
@@ -250,6 +250,9 @@ public class WebSocketChannelClient {
       Log.d(TAG, e.getMessage());
     }
 
+    /**
+     * 나머지 메시지는 이곳에서 처리
+     */
     switch (state) {
       case NEW:
       case CONNECTED:

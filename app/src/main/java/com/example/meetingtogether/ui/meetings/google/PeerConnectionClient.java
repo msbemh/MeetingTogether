@@ -159,7 +159,7 @@ public class PeerConnectionClient {
   // remote peer after both local and remote description are set.
   @Nullable
   private List<IceCandidate> queuedRemoteCandidates;
-//  private boolean isInitiator;
+  private boolean isInitiator;
   @Nullable private SessionDescription localDescription; // either offer or answer description
   @Nullable
   private VideoCapturer videoCapturer;
@@ -375,6 +375,7 @@ public class PeerConnectionClient {
     this.localRender = localRender;
     this.remoteSinks = remoteSinks;
     this.videoCapturer = videoCapturer;
+    this.isInitiator = isInitiator;
     executor.execute(() -> {
       try {
         createMediaConstraintsInternal();
@@ -814,7 +815,7 @@ public class PeerConnectionClient {
     executor.execute(() -> {
       if (peerConnection != null && !isError) {
         Log.d(TAG, "PC Create OFFER");
-        isInitiator = true;
+        this.isInitiator = true;
         peerConnection.createOffer(sdpObserver, sdpMediaConstraints);
       }
     });
@@ -824,7 +825,7 @@ public class PeerConnectionClient {
     executor.execute(() -> {
       if (peerConnection != null && !isError) {
         Log.d(TAG, "PC create ANSWER");
-        isInitiator = false;
+        this.isInitiator = false;
         peerConnection.createAnswer(sdpObserver, sdpMediaConstraints);
       }
     });
@@ -1350,7 +1351,7 @@ public class PeerConnectionClient {
         if (peerConnection == null || isError) {
           return;
         }
-        if (isInitiator) {
+        if (PeerConnectionClient.this.isInitiator) {
           // For offering peer connection we first create offer and set
           // local SDP, then after receiving answer set remote SDP.
           if (peerConnection.getRemoteDescription() == null) {

@@ -328,13 +328,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
   @Override
   public void onWebSocketMessage(final String msg) {
 
-    /**
-     * 웹소켓 연결 확인
-     */
-    if (wsClient.getState() != WebSocketChannelClient.WebSocketConnectionState.REGISTERED) {
-      Log.e(TAG, "Got WebSocket message in non registered state.");
-      return;
-    }
+
 
     try {
       JSONObject json = new JSONObject(msg);
@@ -344,24 +338,34 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         json = new JSONObject(msgText);
         String type = json.optString("type");
 
+        /**
+         * 웹소켓 연결 확인
+         */
+        if (!"connected".equals(type) && wsClient.getState() != WebSocketChannelClient.WebSocketConnectionState.REGISTERED) {
+          Log.e(TAG, "Got WebSocket message in non registered state.");
+          return;
+        }
+
         // type : joined
         if(type.equals("joined")){
           events.onWebSocketJoined();
+
         // type : userList
         }else if(type.equals("userList")){
 
           List<UserModel> userList = new ArrayList<UserModel>();
           JSONArray jsonArray = json.getJSONArray("userList");
 
+          String initiator = json.getString("initiator");
+
           for (int i = 0; i < jsonArray.length(); i++){
             JSONObject obj = jsonArray.getJSONObject(i);
             Log.d(TAG, "obj:"+obj);
             UserModel userModel = new UserModel(obj.getString("clientID"));
-
             userList.add(userModel);
           }
 
-          events.onUserList(userList);
+          events.onUserList(userList, initiator);
         // type : connected
         } else if (type.equals("connected")) {
           String receiveClientId = json.optString("clientId");

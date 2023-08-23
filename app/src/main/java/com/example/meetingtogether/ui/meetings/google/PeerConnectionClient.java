@@ -159,7 +159,7 @@ public class PeerConnectionClient {
   // remote peer after both local and remote description are set.
   @Nullable
   private List<IceCandidate> queuedRemoteCandidates;
-  private boolean isInitiator;
+//  private boolean isInitiator;
   @Nullable private SessionDescription localDescription; // either offer or answer description
   @Nullable
   private VideoCapturer videoCapturer;
@@ -265,7 +265,7 @@ public class PeerConnectionClient {
    * Peer connection events.
    */
   public interface PeerConnectionEvents {
-    void onPeerCreated(PeerConnection peerConnection);
+    void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator);
 
     /**
      * Callback fired once local SDP is created and set.
@@ -367,7 +367,7 @@ public class PeerConnectionClient {
 //  }
 
   public void createPeerConnection(final VideoSink localRender, final List<VideoSink> remoteSinks,
-      final VideoCapturer videoCapturer) {
+      final VideoCapturer videoCapturer, Boolean isInitiator) {
     if (peerConnectionParameters == null) {
       Log.e(TAG, "Creating peer connection without initializing factory.");
       return;
@@ -378,7 +378,7 @@ public class PeerConnectionClient {
     executor.execute(() -> {
       try {
         createMediaConstraintsInternal();
-        createPeerConnectionInternal();
+        createPeerConnectionInternal(isInitiator);
         maybeCreateAndStartRtcEventLog();
       } catch (Exception e) {
         reportError("Failed to create peer connection: " + e.getMessage());
@@ -587,7 +587,7 @@ public class PeerConnectionClient {
         "OfferToReceiveVideo", Boolean.toString(isVideoCallEnabled())));
   }
 
-  private void createPeerConnectionInternal() {
+  private void createPeerConnectionInternal(Boolean isInitiator) {
     if (factory == null || isError) {
       Log.e(TAG, "Peerconnection factory is not created");
       return;
@@ -629,7 +629,6 @@ public class PeerConnectionClient {
       init.protocol = peerConnectionParameters.dataChannelParameters.protocol;
       dataChannel = peerConnection.createDataChannel("ApprtcDemo data", init);
     }
-    isInitiator = false;
 
     // Set INFO libjingle logging.
     // NOTE: this _must_ happen while `factory` is alive!
@@ -671,7 +670,7 @@ public class PeerConnectionClient {
 //    }
     Log.d(TAG, "Peer connection created.");
 
-    this.events.onPeerCreated(peerConnection);
+    this.events.onPeerCreated(peerConnection, isInitiator);
   }
 
   private File createRtcEventLogOutputFile() {

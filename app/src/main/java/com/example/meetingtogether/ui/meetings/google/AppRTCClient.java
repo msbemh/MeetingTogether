@@ -111,7 +111,7 @@ public interface AppRTCClient {
   interface SignalingEvents {
     void onWebSocketJoined();
     void onWebSocketConnected(final String clientId);
-    void onUserList(final List<UserModel> userList);
+    void onUserList(final List<UserModel> userList, String initiator);
     /**
      * Callback fired once the room's signaling parameters
      * SignalingParameters are extracted.

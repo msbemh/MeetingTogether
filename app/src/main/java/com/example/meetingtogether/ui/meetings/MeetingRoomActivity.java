@@ -1131,7 +1131,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      * 모든 콜백들은 Websocket 시그널링 루퍼 스레드로부터 호출 됩니다.
      * 그리고 UI 스레드로 라우팅 됩니다.
      */
-    private void onConnectedToRoomInternal() {
+    private void onConnectedToRoomInternal(Boolean isInitiator) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
 
         logAndToast("Creating peer connection, delay=" + delta + "ms");
@@ -1140,7 +1140,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             videoCapturer = createVideoCapturer();
         }
         peerConnectionClient.createPeerConnection(
-                localProxyVideoSink, remoteSinks, videoCapturer);
+                localProxyVideoSink, remoteSinks, videoCapturer, isInitiator);
 
 
 
@@ -1167,14 +1167,19 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onPeerCreated(PeerConnection peerConnection) {
+    public void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                logAndToast("Creating OFFER...");
-                // Create offer. Offer SDP will be sent to answering client in
-                // PeerConnectionEvents.onLocalDescription event.
-                peerConnectionClient.createOffer();
+                if(isInitiator){
+                    logAndToast("Creating OFFER...");
+                    // Create offer. Offer SDP will be sent to answering client in
+                    // PeerConnectionEvents.onLocalDescription event.
+                    peerConnectionClient.createOffer();
+                }else{
+                    logAndToast("Creating ANSWER...");
+                    peerConnectionClient.createAnswer();
+                }
             }
         });
     }
@@ -1191,7 +1196,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onUserList(List<UserModel> userList) {
+    public void onUserList(List<UserModel> userList, String initiator) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1201,10 +1206,17 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                     UserModel userModel = userList.get(i);
                     Log.d(TAG, "userModel.clientID:" + userModel.clientID);
 
-                }
+                    // 자기 자신은 제외 시키자
+                    if(userModel.clientID.equals(clientId)){
+                       continue;
+                    }
 
-                Log.d(TAG, "Peer 없으면 생성시키자^^");
-                onConnectedToRoomInternal();
+                    // initiator만 피어를 생성 시키고 offer를 전송 시키자.
+                    if(userModel.clientID.equals(initiator)){
+                        Log.d(TAG, "Peer 생성시키자^^");
+                        onConnectedToRoomInternal(true);
+                    }
+                }
             }
         });
     }

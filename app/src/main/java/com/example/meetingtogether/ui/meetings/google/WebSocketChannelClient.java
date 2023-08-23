@@ -228,6 +228,28 @@ public class WebSocketChannelClient {
 
   public void send(String message) {
     checkIfCalledOnValidThread();
+
+    /**
+     * join일 경우 그냥 보내주자
+     */
+    JSONObject jsonObj = null;
+    try {
+      jsonObj = new JSONObject(message);
+      String type = jsonObj.getString("type");
+      if("join".equals(type)){
+        JSONObject jsonObj2 = new JSONObject();
+        jsonObj2.put("cmd", "send");
+        jsonObj2.put("msg", message);
+        message = jsonObj2.toString();
+        Log.d(TAG, "C->WSS: " + message);
+        ws.emit("message", message);
+        return;
+      }
+    } catch (JSONException e) {
+      e.printStackTrace();
+      Log.d(TAG, e.getMessage());
+    }
+
     switch (state) {
       case NEW:
       case CONNECTED:

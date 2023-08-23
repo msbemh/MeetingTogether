@@ -874,7 +874,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
       videoCapturer = createVideoCapturer();
     }
     peerConnectionClient.createPeerConnection(
-        localProxyVideoSink, remoteSinks, videoCapturer);
+        localProxyVideoSink, remoteSinks, videoCapturer, false);
 
     if (signalingParameters.initiator) {
       logAndToast("Creating OFFER...");
@@ -909,7 +909,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
   }
 
   @Override
-  public void onUserList(List<UserModel> userList) {
+  public void onUserList(List<UserModel> userList, String initiato) {
 
   }
 
@@ -991,7 +991,7 @@ public class CallActivity extends Activity implements AppRTCClient.SignalingEven
   }
 
   @Override
-  public void onPeerCreated(PeerConnection peerConnection) {
+  public void onPeerCreated(PeerConnection peerConnection, Boolean isInitiator) {
 
   }
 

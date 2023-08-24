@@ -33,16 +33,16 @@ public class CaptureQualityController implements SeekBar.OnSeekBarChangeListener
   // Prioritize framerate below this threshold and resolution above the threshold.
   private static final int FRAMERATE_THRESHOLD = 15;
   private TextView captureFormatText;
-  private CallFragment.OnCallEvents callEvents;
+//  private CallFragment.OnCallEvents callEvents;
   private int width;
   private int height;
   private int framerate;
   private double targetBandwidth;
 
   public CaptureQualityController(
-      TextView captureFormatText, CallFragment.OnCallEvents callEvents) {
+      TextView captureFormatText) {
     this.captureFormatText = captureFormatText;
-    this.callEvents = callEvents;
+//    this.callEvents = callEvents;
   }
 
   private final Comparator<CaptureFormat> compareFormats = new Comparator<CaptureFormat>() {
@@ -102,7 +102,7 @@ public class CaptureQualityController implements SeekBar.OnSeekBarChangeListener
 
   @Override
   public void onStopTrackingTouch(SeekBar seekBar) {
-    callEvents.onCaptureFormatChange(width, height, framerate);
+//    callEvents.onCaptureFormatChange(width, height, framerate);
   }
 
   // Return the highest frame rate possible based on bandwidth and format.

@@ -107,4 +107,8 @@ public class PeerConfig {
     public static final int HD_VIDEO_HEIGHT = 720;
     public static final int BPS_IN_KBPS = 1000;
     public static final String RTCEVENTLOG_OUTPUT_DIR_NAME = "rtc_event_log";
+
+
+    public static final int CAPTURE_PERMISSION_REQUEST_CODE = 1;
+    public static final int STAT_CALLBACK_PERIOD = 1000;
 }

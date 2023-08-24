@@ -66,12 +66,12 @@ public interface AppRTCClient {
   /**
    * Send Ice candidate to the other participant.
    */
-  void sendLocalIceCandidate(final IceCandidate candidate);
+  void sendLocalIceCandidate(final IceCandidate candidate, String senderId, String targetId);
 
   /**
    * Send removed ICE candidates to the other participant.
    */
-  void sendLocalIceCandidateRemovals(final IceCandidate[] candidates);
+  void sendLocalIceCandidateRemovals(final IceCandidate[] candidates, String senderId, String targetId);
 
   /**
    * Disconnect from room.
@@ -109,6 +109,7 @@ public interface AppRTCClient {
    * <p>Methods are guaranteed to be invoked on the UI thread of `activity`.
    */
   interface SignalingEvents {
+    void onOffer(String senderId, String targetId, String type, SessionDescription sdp);
     void onWebSocketJoined();
     void onWebSocketConnected(final String clientId);
     void onUserList(final List<UserModel> userList, String initiator);
@@ -121,17 +122,17 @@ public interface AppRTCClient {
     /**
      * Callback fired once remote SDP is received.
      */
-    void onRemoteDescription(final SessionDescription sdp, String senderId, String targetId);
+    void onRemoteDescription(final SessionDescription sdp, String senderId, String targetId, String type);
 
     /**
      * Callback fired once remote Ice candidate is received.
      */
-    void onRemoteIceCandidate(final IceCandidate candidate);
+    void onRemoteIceCandidate(final IceCandidate candidate, String senderId, String targetId);
 
     /**
      * Callback fired once remote Ice candidate removals are received.
      */
-    void onRemoteIceCandidatesRemoved(final IceCandidate[] candidates);
+    void onRemoteIceCandidatesRemoved(final IceCandidate[] candidates, String senderId, String targetId);
 
     /**
      * Callback fired once channel is closed.

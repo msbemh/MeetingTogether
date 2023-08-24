@@ -65,7 +65,7 @@ public class HudFragment extends Fragment {
 
     Bundle args = getArguments();
     if (args != null) {
-      displayHud = args.getBoolean(CallActivity.EXTRA_DISPLAY_HUD, false);
+//      displayHud = args.getBoolean(CallActivity.EXTRA_DISPLAY_HUD, false);
     }
     int visibility = displayHud ? View.VISIBLE : View.INVISIBLE;
     statView.setVisibility(View.INVISIBLE);

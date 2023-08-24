@@ -268,7 +268,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
   // Send Ice candidate to the other participant.
   @Override
-  public void sendLocalIceCandidate(final IceCandidate candidate) {
+  public void sendLocalIceCandidate(final IceCandidate candidate, String senderId, String targetId) {
     handler.post(new Runnable() {
       @Override
       public void run() {
@@ -277,51 +277,31 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         jsonPut(json, "label", candidate.sdpMLineIndex);
         jsonPut(json, "id", candidate.sdpMid);
         jsonPut(json, "candidate", candidate.sdp);
-        if (initiator) {
-          // Call initiator sends ice candidates to GAE server.
-          if (roomState != ConnectionState.CONNECTED) {
-            reportError("Sending ICE candidate in non connected state.");
-            return;
-          }
-//          sendPostMessage(MessageType.MESSAGE, messageUrl, json.toString());
-          if (connectionParameters.loopback) {
-            events.onRemoteIceCandidate(candidate);
-          }
-        } else {
-          // Call receiver sends ice candidates to websocket server.
-          wsClient.send(json.toString());
-        }
+        jsonPut(json, "senderId", senderId);
+        jsonPut(json, "targetId", targetId);
+
+        wsClient.send(json.toString());
       }
     });
   }
 
   // Send removed Ice candidates to the other participant.
   @Override
-  public void sendLocalIceCandidateRemovals(final IceCandidate[] candidates) {
+  public void sendLocalIceCandidateRemovals(final IceCandidate[] candidates, String senderId, String targetId) {
     handler.post(new Runnable() {
       @Override
       public void run() {
         JSONObject json = new JSONObject();
         jsonPut(json, "type", "remove-candidates");
+        jsonPut(json, "senderId", senderId);
+        jsonPut(json, "targetId", targetId);
         JSONArray jsonArray = new JSONArray();
         for (final IceCandidate candidate : candidates) {
           jsonArray.put(toJsonCandidate(candidate));
         }
         jsonPut(json, "candidates", jsonArray);
-        if (initiator) {
-          // Call initiator sends ice candidates to GAE server.
-          if (roomState != ConnectionState.CONNECTED) {
-            reportError("Sending ICE candidate removals in non connected state.");
-            return;
-          }
-//          sendPostMessage(MessageType.MESSAGE, messageUrl, json.toString());
-          if (connectionParameters.loopback) {
-            events.onRemoteIceCandidatesRemoved(candidates);
-          }
-        } else {
-          // Call receiver sends ice candidates to websocket server.
-          wsClient.send(json.toString());
-        }
+
+        wsClient.send(json.toString());
       }
     });
   }
@@ -342,8 +322,11 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         String type = json.optString("type");
         String senderId = null;
         String targetId = null;
-        if(json.getString("senderId") != null) senderId = json.getString("senderId");
-        if(json.getString("targetId") != null) targetId = json.getString("targetId");
+        if(!"".equals(json.optString("senderId"))) senderId = json.optString("senderId");
+        if(!"".equals(json.optString("targetId"))) targetId = json.optString("targetId");
+        SessionDescription sdp = null;
+        if(!"".equals(json.optString("sdp"))) sdp = new SessionDescription(
+                SessionDescription.Type.fromCanonicalForm("offer"), json.optString("sdp"));
 
         /**
          * 웹소켓 연결 확인
@@ -373,6 +356,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
           }
 
           events.onUserList(userList, initiator);
+
         // type : connected
         } else if (type.equals("connected")) {
           String receiveClientId = json.optString("clientId");
@@ -380,7 +364,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
         // type : candidate
         } else if (type.equals("candidate")) {
-          events.onRemoteIceCandidate(toJavaCandidate(json));
+          events.onRemoteIceCandidate(toJavaCandidate(json), senderId, targetId);
 
         // type : remove-candidates
         } else if (type.equals("remove-candidates")) {
@@ -389,19 +373,15 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
           for (int i = 0; i < candidateArray.length(); ++i) {
             candidates[i] = toJavaCandidate(candidateArray.getJSONObject(i));
           }
-          events.onRemoteIceCandidatesRemoved(candidates);
+          events.onRemoteIceCandidatesRemoved(candidates, senderId, targetId);
 
         // type : answer
         } else if (type.equals("answer")) {
-          SessionDescription sdp = new SessionDescription(
-                  SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
-          events.onRemoteDescription(sdp, senderId, targetId);
+          events.onRemoteDescription(sdp, senderId, targetId, type);
 
         // type : offer
         } else if (type.equals("offer")) {
-          SessionDescription sdp = new SessionDescription(
-                  SessionDescription.Type.fromCanonicalForm(type), json.getString("sdp"));
-          events.onRemoteDescription(sdp, senderId, targetId);
+          events.onOffer(senderId, targetId, type, sdp);
 
         // type : bye
         } else if (type.equals("bye")) {

@@ -161,23 +161,6 @@ public class WebSocketChannelClient {
               String message = args[0].toString();
               Log.d(TAG, "WSS->C: " + message);
 
-              String type = "";
-              try{
-                JSONObject json = new JSONObject(message);
-                String msgText = json.getString("msg");
-                String errorText = json.optString("error");
-
-                type = json.getString(msgText);
-
-              }catch (Exception e){
-                e.printStackTrace();
-                Log.d(TAG, e.getMessage());
-              }
-
-//              if("userList".equals(type)){
-//                state = WebSocketConnectionState.REGISTERED;
-//              }
-
               /**
                * 메시지를 받습니다.
                */
@@ -198,33 +181,6 @@ public class WebSocketChannelClient {
       reportError("URI error: " + e.getMessage());
     }
   }
-
-//  public void register(final String roomID, final String clientID) {
-//    checkIfCalledOnValidThread();
-//    this.roomID = roomID;
-//    this.clientID = clientID;
-//    if (state != WebSocketConnectionState.CONNECTED) {
-//      Log.w(TAG, "WebSocket register() in state " + state);
-//      return;
-//    }
-//    Log.d(TAG, "Registering WebSocket for room " + roomID + ". ClientID: " + clientID);
-//    JSONObject json = new JSONObject();
-//    try {
-//      json.put("cmd", "register");
-//      json.put("roomid", roomID);
-//      json.put("clientid", clientID);
-//      Log.d(TAG, "C->WSS: " + json.toString());
-//      ws.sendTextMessage(json.toString());
-//      state = WebSocketConnectionState.REGISTERED;
-//      // Send any previously accumulated messages.
-//      for (String sendMessage : wsSendQueue) {
-//        send(sendMessage);
-//      }
-//      wsSendQueue.clear();
-//    } catch (JSONException e) {
-//      reportError("WebSocket register JSON error: " + e.getMessage());
-//    }
-//  }
 
   public void send(String message) {
     checkIfCalledOnValidThread();
@@ -279,13 +235,6 @@ public class WebSocketChannelClient {
         break;
     }
   }
-
-  // This call can be used to send WebSocket messages before WebSocket
-  // connection is opened.
-//  public void post(String message) {
-//    checkIfCalledOnValidThread();
-//    sendWSSMessage("POST", message);
-//  }
 
   public void disconnect(boolean waitForComplete) {
     checkIfCalledOnValidThread();
@@ -342,23 +291,6 @@ public class WebSocketChannelClient {
     });
   }
 
-  // Asynchronously send POST/DELETE to WebSocket server.
-//  private void sendWSSMessage(final String method, final String message) {
-//    String postUrl = postServerUrl + "/" + roomID + "/" + clientID;
-//    Log.d(TAG, "WS " + method + " : " + postUrl + " : " + message);
-//    AsyncHttpURLConnection httpConnection =
-//        new AsyncHttpURLConnection(method, postUrl, message, new AsyncHttpURLConnection.AsyncHttpEvents() {
-//          @Override
-//          public void onHttpError(String errorMessage) {
-//            reportError("WS " + method + " error: " + errorMessage);
-//          }
-//
-//          @Override
-//          public void onHttpComplete(String response) {}
-//        });
-//    httpConnection.send();
-//  }
-
   // Helper method for debugging purposes. Ensures that WebSocket method is
   // called on a looper thread.
   private void checkIfCalledOnValidThread() {
@@ -367,60 +299,4 @@ public class WebSocketChannelClient {
     }
   }
 
-//  private class WebSocketObserver implements WebSocketConnectionObserver {
-//    @Override
-//    public void onOpen() {
-//      Log.d(TAG, "WebSocket connection opened to: " + wsServerUrl);
-//      handler.post(new Runnable() {
-//        @Override
-//        public void run() {
-//          state = WebSocketConnectionState.CONNECTED;
-//          // Check if we have pending register request.
-//          if (roomID != null && clientID != null) {
-//            register(roomID, clientID);
-//          }
-//        }
-//      });
-//    }
-//
-//    @Override
-//    public void onClose(WebSocketCloseNotification code, String reason) {
-//      Log.d(TAG, "WebSocket connection closed. Code: " + code + ". Reason: " + reason + ". State: "
-//              + state);
-//      synchronized (closeEventLock) {
-//        closeEvent = true;
-//        closeEventLock.notify();
-//      }
-//      handler.post(new Runnable() {
-//        @Override
-//        public void run() {
-//          if (state != WebSocketConnectionState.CLOSED) {
-//            state = WebSocketConnectionState.CLOSED;
-//            events.onWebSocketClose();
-//          }
-//        }
-//      });
-//    }
-//
-//    @Override
-//    public void onTextMessage(String payload) {
-//      Log.d(TAG, "WSS->C: " + payload);
-//      final String message = payload;
-//      handler.post(new Runnable() {
-//        @Override
-//        public void run() {
-//          if (state == WebSocketConnectionState.CONNECTED
-//              || state == WebSocketConnectionState.REGISTERED) {
-//            events.onWebSocketMessage(message);
-//          }
-//        }
-//      });
-//    }
-//
-//    @Override
-//    public void onRawTextMessage(byte[] payload) {}
-//
-//    @Override
-//    public void onBinaryMessage(byte[] payload) {}
-//  }
 }

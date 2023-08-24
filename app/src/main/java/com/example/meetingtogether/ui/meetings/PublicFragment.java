@@ -1,8 +1,6 @@
 package com.example.meetingtogether.ui.meetings;
 
 import android.content.Context;
-import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -10,10 +8,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.viewpager2.adapter.FragmentStateAdapter;
 
-import android.telecom.Call;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,14 +18,11 @@ import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.CommonRecyclerView;
 import com.example.meetingtogether.databinding.FragmentPublicBinding;
 import com.example.meetingtogether.databinding.PlainRowItemBinding;
-import com.example.meetingtogether.ui.meetings.google.CallActivity;
-import com.example.meetingtogether.ui.meetings.google.ConnectActivity;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 public class PublicFragment extends Fragment {
 

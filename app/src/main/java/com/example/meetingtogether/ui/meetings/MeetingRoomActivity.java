@@ -1,9 +1,12 @@
 package com.example.meetingtogether.ui.meetings;
 
-import static com.example.meetingtogether.ui.meetings.PeerConfig.AUDIO_CODEC_ISAC;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.CAPTURE_PERMISSION_REQUEST_CODE;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_AECDUMP_ENABLED;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_AUDIOCODEC;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_AUDIO_BITRATE;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_CAMERA2;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_CAPTURETOTEXTURE_ENABLED;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_CMDLINE;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_DATA_CHANNEL_ENABLED;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_DISABLE_BUILT_IN_AEC;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_DISABLE_BUILT_IN_AGC;
@@ -21,38 +24,32 @@ import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_NOAUDIOPR
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_OPENSLES_ENABLED;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_ORDERED;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_PROTOCOL;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_ROOMID;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_RUNTIME;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_SCREENCAPTURE;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_TRACING;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_URLPARAMETERS;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEOCODEC;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_BITRATE;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_CALL;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_FILE_AS_CAMERA;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_FPS;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_HEIGHT;
 import static com.example.meetingtogether.ui.meetings.PeerConfig.EXTRA_VIDEO_WIDTH;
-import static com.example.meetingtogether.ui.meetings.PeerConfig.VIDEO_CODEC_H264_HIGH;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.CAPTURE_PERMISSION_REQUEST_CODE;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CAMERA2;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CAPTURETOTEXTURE_ENABLED;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_CMDLINE;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_ROOMID;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_RUNTIME;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_HEIGHT;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SAVE_REMOTE_VIDEO_TO_FILE_WIDTH;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_SCREENCAPTURE;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_URLPARAMETERS;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.EXTRA_VIDEO_FILE_AS_CAMERA;
-import static com.example.meetingtogether.ui.meetings.google.CallActivity.STAT_CALLBACK_PERIOD;
+import static com.example.meetingtogether.ui.meetings.PeerConfig.STAT_CALLBACK_PERIOD;
+
 
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjection;
@@ -62,16 +59,12 @@ import android.os.Build;
 import android.os.Bundle;
 
 import com.example.meetingtogether.R;
-import com.example.meetingtogether.common.Constants;
 import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
 
 import com.example.meetingtogether.ui.meetings.google.AppRTCAudioManager;
 import com.example.meetingtogether.ui.meetings.google.AppRTCClient;
-import com.example.meetingtogether.ui.meetings.google.CallActivity;
-import com.example.meetingtogether.ui.meetings.google.CallFragment;
 import com.example.meetingtogether.ui.meetings.google.CpuMonitor;
-import com.example.meetingtogether.ui.meetings.google.DirectRTCClient;
-import com.example.meetingtogether.ui.meetings.google.HudFragment;
+import com.example.meetingtogether.ui.meetings.google.CustomPeerConnectionFactory;
 import com.example.meetingtogether.ui.meetings.google.PeerConnectionClient;
 import com.example.meetingtogether.ui.meetings.google.WebSocketRTCClient;
 
@@ -81,9 +74,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.os.Environment;
 import android.os.Handler;
-import android.preference.PreferenceManager;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
@@ -93,15 +84,11 @@ import android.widget.Toast;
 import androidx.core.content.ContextCompat;
 
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
 import org.webrtc.Camera1Enumerator;
 import org.webrtc.Camera2Enumerator;
 import org.webrtc.CameraEnumerator;
-import org.webrtc.DefaultVideoDecoderFactory;
-import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
 import org.webrtc.FileVideoCapturer;
 import org.webrtc.IceCandidate;
@@ -113,39 +100,25 @@ import org.webrtc.RTCStatsReport;
 import org.webrtc.RendererCommon;
 import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.SessionDescription;
-import org.webrtc.SoftwareVideoDecoderFactory;
-import org.webrtc.SoftwareVideoEncoderFactory;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoCapturer;
-import org.webrtc.VideoDecoderFactory;
-import org.webrtc.VideoEncoderFactory;
 import org.webrtc.VideoFileRenderer;
 import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
-import org.webrtc.audio.AudioDeviceModule;
-import org.webrtc.audio.JavaAudioDeviceModule;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 
-import io.socket.client.IO;
-import io.socket.client.Socket;
-import io.socket.emitter.Emitter;
-
 public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClient.SignalingEvents,
-        PeerConnectionClient.PeerConnectionEvents,
-        CallFragment.OnCallEvents {
+        PeerConnectionClient.PeerConnectionEvents, CustomPeerConnectionFactory.CustomPeerFactoryEvents{
     private static final String TAG = "TEST";
 
     /**
@@ -210,7 +183,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      */
     private final ProxyVideoSink remoteProxyRenderer = new ProxyVideoSink();
     private final ProxyVideoSink localProxyVideoSink = new ProxyVideoSink();
-    @Nullable private PeerConnectionClient peerConnectionClient;
     @Nullable
     private AppRTCClient appRtcClient;
     @Nullable
@@ -228,7 +200,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     private boolean activityRunning;
     private AppRTCClient.RoomConnectionParameters roomConnectionParameters;
     @Nullable
-    private PeerConnectionClient.PeerConnectionParameters peerConnectionParameters;
+    private CustomPeerConnectionFactory.PeerConnectionParameters peerConnectionParameters;
     private boolean connected;
     private boolean isError;
     private boolean callControlFragmentVisible = true;
@@ -244,7 +216,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     private CpuMonitor cpuMonitor;
 
     private List<UserModel> userList;
-    private Map<String, PeerConnectionClient> PeerConnections = new HashMap();
+    private Map<String, PeerConnectionClient> peerConnections = new HashMap();
     private String clientId;
 
     /**
@@ -346,7 +318,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         pipRenderer = findViewById(R.id.pip_video_view);
         fullscreenRenderer = findViewById(R.id.fullscreen_video_view);
 
-
         /**
          * 피드를 swap 합니다
          */
@@ -362,7 +333,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         /**
          * EglBase는 EGL(EGL, Embedded-System Graphics Library)과 관련이 있으며, OpenGL ES와 하드웨어 사이의 상호 작용을 관리합니다.
          */
-        final EglBase eglBase = EglBase.create();
+        eglBase = EglBase.create();
 
         /**
          * pip 비디오 렌더러 생성
@@ -461,7 +432,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
          * Peer 연결 파라미터 생성
          */
         peerConnectionParameters =
-                new PeerConnectionClient.PeerConnectionParameters(intent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
+                new CustomPeerConnectionFactory.PeerConnectionParameters(intent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
                         tracing, videoWidth, videoHeight, intent.getIntExtra(EXTRA_VIDEO_FPS, 0),
                         intent.getIntExtra(EXTRA_VIDEO_BITRATE, 0), intent.getStringExtra(EXTRA_VIDEOCODEC),
                         intent.getBooleanExtra(EXTRA_HWCODEC_ENABLED, true),
@@ -482,15 +453,23 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         Log.d(TAG, "VIDEO_FILE: '" + intent.getStringExtra(EXTRA_VIDEO_FILE_AS_CAMERA) + "'");
 
         /**
+         * 피디오 캡처 생성
+         */
+        if (peerConnectionParameters.videoCallEnabled) {
+            videoCapturer = createVideoCapturer();
+        }
+
+        /**
          * Room 명이 IP 형태라면 DirectRTCClient를 이용하고
          * 그렇지 않을 경우엔 표준 WebSocketRTCClient를 이용합니다.
          */
-        if (loopback || !DirectRTCClient.IP_PATTERN.matcher(roomId).matches()) {
-            appRtcClient = new WebSocketRTCClient(this, roomId);
-        } else {
-            Log.i(TAG, "Using DirectRTCClient because room name looks like an IP.");
-            appRtcClient = new DirectRTCClient(this);
-        }
+        appRtcClient = new WebSocketRTCClient(this, roomId);
+//        if (loopback || !DirectRTCClient.IP_PATTERN.matcher(roomId).matches()) {
+//            appRtcClient = new WebSocketRTCClient(this, roomId);
+//        } else {
+//            Log.i(TAG, "Using DirectRTCClient because room name looks like an IP.");
+//            appRtcClient = new DirectRTCClient(this);
+//        }
 
         /**
          * Room 연결 파라미터 생성
@@ -511,19 +490,14 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         }
 
         /**
-         * Peer 연결 클라이언트 생성
-         */
-        peerConnectionClient = new PeerConnectionClient(
-                getApplicationContext(), eglBase, peerConnectionParameters, MeetingRoomActivity.this);
-
-        /**
          * Peer 팩토리 생성
          */
+        CustomPeerConnectionFactory customPeerConnectionFactory = CustomPeerConnectionFactory.getInstance(getApplicationContext(), eglBase, this, peerConnectionParameters);
         PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
         if (loopback) {
             options.networkIgnoreMask = 0;
         }
-        peerConnectionClient.createPeerConnectionFactory(options);
+        customPeerConnectionFactory.createPeerConnectionFactory(options);
 
         /**
          * 스크린 캡처여부에 따라 다르게 start 한다.
@@ -549,150 +523,16 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         return true;
     }
 
-//    private void roomIn(){
-//        Toast.makeText(MeetingRoomActivity.this, roomId + "번방에 진입 했습니다.",Toast.LENGTH_SHORT).show();
-//
-//        /**
-//         * 소켓 연결
-//         */
-//        socketIoConn();
-//
-//        /**
-//         * [SurfaceViewRenderer]
-//         * 비디오 프레임을 효율적으로 렌더링할 수 있도록 도와줍니다.
-//         * EglBase와 함께 사용합니다.
-//         * 비디오 프레임을 OpenGL ES 컨텍스트로 렌더링하며, 이를 통해 빠르고 부드러운 비디오 표시가 가능합니다.
-//         *
-//         * SurfaceViewRenderer를 사용하려면 적절한 EglBase 인스턴스를 생성하고
-//         * init 메서드를 호출하여 초기화해야 합니다.
-//         * 그런 다음 SurfaceViewRenderer 인스턴스를 생성하고,
-//         * setEglRenderer 메서드를 사용하여 렌더러를 설정하고
-//         * init 메서드를 호출하여 초기화합니다.
-//         *
-//         * 마지막으로 비디오 프레임을 받아와 renderFrame 메서드를 호출하여 화면에 렌더링합니다.
-//         */
-//
-//        /**
-//         * EglBase는 EGL(EGL, Embedded-System Graphics Library)과 관련이 있으며, OpenGL ES와 하드웨어 사이의 상호 작용을 관리합니다.
-//         */
-//        eglBase = EglBase.create();
-//
-//        fullscreenRenderer = binding.fullscreenVideoView;
-//        fullscreenRenderer.init(eglBase.getEglBaseContext(), null);
-//        fullscreenRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL);
-//        fullscreenRenderer.setEnableHardwareScaler(true /* enabled */);
-//        fullscreenRenderer.setMirror(true);
-//
-//        /**
-//         * Peer 연결 파라미터 설정 준비
-//         */
-//        boolean loopback = intent.getBooleanExtra(EXTRA_LOOPBACK, false);
-//        boolean tracing = intent.getBooleanExtra(EXTRA_TRACING, false);
-//
-//        int videoWidth = intent.getIntExtra(EXTRA_VIDEO_WIDTH, 0);
-//        int videoHeight = intent.getIntExtra(EXTRA_VIDEO_HEIGHT, 0);
-//
-//        PeerConnectionClient.DataChannelParameters dataChannelParameters = null;
-//
-//        /**
-//         * 데이터 채널 설정
-//         */
-//        if (intent.getBooleanExtra(EXTRA_DATA_CHANNEL_ENABLED, false)) {
-//            dataChannelParameters = new PeerConnectionClient.DataChannelParameters(intent.getBooleanExtra(EXTRA_ORDERED, true),
-//                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS_MS, -1),
-//                    intent.getIntExtra(EXTRA_MAX_RETRANSMITS, -1), intent.getStringExtra(EXTRA_PROTOCOL),
-//                    intent.getBooleanExtra(EXTRA_NEGOTIATED, false), intent.getIntExtra(EXTRA_ID, -1));
-//        }
-//
-//        /**K
-//         * Peer 연결 파라미터 생성
-//         */
-//        peerConnectionParameters =
-//                new PeerConnectionClient.PeerConnectionParameters(intent.getBooleanExtra(EXTRA_VIDEO_CALL, true), loopback,
-//                        tracing, videoWidth, videoHeight, intent.getIntExtra(EXTRA_VIDEO_FPS, 0),
-//                        intent.getIntExtra(EXTRA_VIDEO_BITRATE, 0), intent.getStringExtra(EXTRA_VIDEOCODEC),
-//                        intent.getBooleanExtra(EXTRA_HWCODEC_ENABLED, true),
-//                        intent.getBooleanExtra(EXTRA_FLEXFEC_ENABLED, false),
-//                        intent.getIntExtra(EXTRA_AUDIO_BITRATE, 0), intent.getStringExtra(EXTRA_AUDIOCODEC),
-//                        intent.getBooleanExtra(EXTRA_NOAUDIOPROCESSING_ENABLED, false),
-//                        intent.getBooleanExtra(EXTRA_AECDUMP_ENABLED, false),
-//                        intent.getBooleanExtra(EXTRA_SAVE_INPUT_AUDIO_TO_FILE_ENABLED, false),
-//                        intent.getBooleanExtra(EXTRA_OPENSLES_ENABLED, false),
-//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AEC, false),
-//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_AGC, false),
-//                        intent.getBooleanExtra(EXTRA_DISABLE_BUILT_IN_NS, false),
-//                        intent.getBooleanExtra(EXTRA_DISABLE_WEBRTC_AGC_AND_HPF, false),
-//                        intent.getBooleanExtra(EXTRA_ENABLE_RTCEVENTLOG, false), dataChannelParameters);
-//
-//        /**
-//         * Peer 연결 클라이언트 생성
-//         */
-//        peerConnectionClient = new PeerConnectionClient(
-//                getApplicationContext(), eglBase, peerConnectionParameters, MeetingRoomActivity.this);
-//
-//        /**
-//         * Peer 팩토리 생성
-//         */
-//        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
-//        if (loopback) {
-//            options.networkIgnoreMask = 0;
-//        }
-//        createPeerConnectionFactory(options);
-//
-//        getVideoSource();
-//    }
+    @Override
+    public void onCustomPeerFactoryError(String errorMessage) {
+        Log.d(TAG, errorMessage);
+    }
 
-//    private void socketIoConn(){
-////        MyApplication app = (MyApplication) getApplication();
-////        mSocket = app.getSocket();
-//
-//        try {
-//            mSocket = IO.socket(Constants.CHAT_SERVER_URL);
-//        } catch (URISyntaxException e) {
-//            throw new RuntimeException(e);
-//        }
-//
-//        mSocket.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
-//            @Override
-//            public void call(Object... args) {
-//                // 연결 성공 시 실행되는 코드
-//                Log.d("TEST", "소켓 연결");
-//                mSocket.emit("join", roomId);
-//            }
-//        }).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
-//            @Override
-//            public void call(Object... args) {
-//                Log.d("TEST", "소켓 종료");
-//            }
-//        }).on("message", new Emitter.Listener() {
-//            @Override
-//            public void call(Object... args) {
-//                try{
-//                    String message = args[0].toString();
-//                    JSONObject jsonObject = new JSONObject(message);
-//                    Log.d("TEST", jsonObject.toString());
-//                    String type = jsonObject.getString("type");
-//                    if("userList".equals(type)){
-//                        JSONArray jsonArray = (JSONArray) jsonObject.get("userList");
-//                        for (int i = 0; i < jsonArray.length(); i++){
-//                            JSONObject userObj = new JSONObject(jsonArray.get(i).toString());
-//                            String clientId = userObj.get("clientId").toString();
-//                            Log.d("TEST", "userObj:"+userObj);
-//                            Log.d("TEST", "clientId:"+clientId);
-//
-//                            userModelList.add(new UserModel(clientId));
-//                        }
-//                        // 유저 리스트 로그
-//                        showUserList();
-//                    }
-//                }catch (Exception e){
-//                    e.printStackTrace();
-//                    Log.e("TEST", e.toString());
-//                }
-//            }
-//        });
-//        mSocket.connect();
-//    }
+    @Override
+    public void onCreatedFactory(PeerConnectionFactory factory) {
+        Log.d(TAG, "피어 팩토리 생성 완료");
+        this.factory = factory;
+    }
 
     private void showUserList(){
         Log.d("TEST", "==========[유저 리스트 시작]==========");
@@ -707,10 +547,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      * 비디오 소스 가져오기
      */
     private void getVideoSource() {
-        /**
-         * 비디오 캡처 생성
-         */
-        videoCapturer = createCameraCapturer(new Camera2Enumerator(this));
 
         /**
          * 비디오 소스 생성
@@ -871,9 +707,19 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         activityRunning = false;
         // Don't stop the video when using screencapture to allow user to show other apps to the remote
         // end.
-        if (peerConnectionClient != null && !screencaptureEnabled) {
-            peerConnectionClient.stopVideoSource();
+
+        /**
+         * 갖고 있는 모든 피어 비디오 중지
+         */
+        Iterator<String> keys = peerConnections.keySet().iterator();
+        while(keys.hasNext()){
+            String keyClientId = keys.next();
+            PeerConnectionClient peerConnectionClient = peerConnections.get(keyClientId);
+            if (peerConnectionClient != null && !screencaptureEnabled) {
+                peerConnectionClient.stopVideoSource();
+            }
         }
+
         if (cpuMonitor != null) {
             cpuMonitor.pause();
         }
@@ -884,9 +730,18 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         super.onStart();
         activityRunning = true;
         // Video is not paused for screencapture. See onPause.
-        if (peerConnectionClient != null && !screencaptureEnabled) {
-            peerConnectionClient.startVideoSource();
+        /**
+         * 갖고 있는 모든 피어 비디오 재개
+         */
+        Iterator<String> keys = peerConnections.keySet().iterator();
+        while(keys.hasNext()){
+            String keyClientId = keys.next();
+            PeerConnectionClient peerConnectionClient = peerConnections.get(keyClientId);
+            if (peerConnectionClient != null && !screencaptureEnabled) {
+                peerConnectionClient.startVideoSource();
+            }
         }
+
         if (cpuMonitor != null) {
             cpuMonitor.resume();
         }
@@ -912,40 +767,6 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         }
         activityRunning = false;
         super.onDestroy();
-    }
-
-    // CallFragment.OnCallEvents interface implementation.
-    @Override
-    public void onCallHangUp() {
-        disconnect();
-    }
-
-    @Override
-    public void onCameraSwitch() {
-        if (peerConnectionClient != null) {
-            peerConnectionClient.switchCamera();
-        }
-    }
-
-    @Override
-    public void onVideoScalingSwitch(RendererCommon.ScalingType scalingType) {
-        fullscreenRenderer.setScalingType(scalingType);
-    }
-
-    @Override
-    public void onCaptureFormatChange(int width, int height, int framerate) {
-        if (peerConnectionClient != null) {
-            peerConnectionClient.changeCaptureFormat(width, height, framerate);
-        }
-    }
-
-    @Override
-    public boolean onToggleMic() {
-        if (peerConnectionClient != null) {
-            micEnabled = !micEnabled;
-            peerConnectionClient.setAudioEnabled(micEnabled);
-        }
-        return micEnabled;
     }
 
     /**
@@ -982,7 +803,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     // Should be called from UI thread
-    private void callConnected() {
+    private void callConnected(PeerConnectionClient peerConnectionClient) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
         Log.i(TAG, "Call connected: delay=" + delta + "ms");
         if (peerConnectionClient == null || isError) {
@@ -1028,10 +849,20 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             fullscreenRenderer.release();
             fullscreenRenderer = null;
         }
-        if (peerConnectionClient != null) {
+        Iterator<String> keys = peerConnections.keySet().iterator();
+        while(keys.hasNext()){
+            String keyClientId = keys.next();
+            PeerConnectionClient peerConnectionClient = peerConnections.get(keyClientId);
             peerConnectionClient.close();
-            peerConnectionClient = null;
+
+            peerConnections.remove(keyClientId);
         }
+//        if(peerConnectionClient != null){
+//            peerConnectionClient.close();
+//            peerConnections.remove(peerConnectionClient);
+//        }
+
+
         if (audioManager != null) {
             audioManager.stop();
             audioManager = null;
@@ -1132,16 +963,20 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
      * 모든 콜백들은 Websocket 시그널링 루퍼 스레드로부터 호출 됩니다.
      * 그리고 UI 스레드로 라우팅 됩니다.
      */
-    private void onConnectedToRoomInternal(Boolean isInitiator, String peerClientId) {
+    private void createPeerConnectionInternal(Boolean isInitiator, String peerClientId, SessionDescription sdp,
+                                              String senderId, String targetId, String type) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
 
         logAndToast("Creating peer connection, delay=" + delta + "ms");
-        VideoCapturer videoCapturer = null;
-        if (peerConnectionParameters.videoCallEnabled) {
-            videoCapturer = createVideoCapturer();
-        }
+
+        /**
+         * Peer 연결 클라이언트 생성
+         */
+        PeerConnectionClient peerConnectionClient = new PeerConnectionClient(
+                getApplicationContext(), eglBase, MeetingRoomActivity.this, peerConnectionParameters.dataChannelParameters != null, peerConnectionParameters, factory);
         peerConnectionClient.createPeerConnection(
-                localProxyVideoSink, remoteSinks, videoCapturer, isInitiator, peerClientId);
+                localProxyVideoSink, remoteSinks, videoCapturer, isInitiator, peerClientId, sdp,
+                senderId, targetId, type);
 
 
 
@@ -1168,7 +1003,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onPeerCreated(PeerConnectionClient peerConnectionClient, PeerConnection peerConnection, Boolean isInitiator, String peerClientId) {
+    public void onPeerCreated(PeerConnectionClient peerConnectionClient, PeerConnection peerConnection, Boolean isInitiator, String peerClientId, SessionDescription sdp,
+                              String senderId, String targetId, String type) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1176,8 +1012,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                  * 피어 생성되면
                  * Map<String, PeerConnectionClient> PeerConnections 에서 관리 한다.
                  */
-                if(PeerConnections.get(peerClientId) == null){
-                    PeerConnections.put(peerClientId, peerConnectionClient);
+                if(peerConnections.get(peerClientId) == null){
+                    peerConnections.put(peerClientId, peerConnectionClient);
                 }
 
                 if(isInitiator){
@@ -1186,11 +1022,27 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                     // PeerConnectionEvents.onLocalDescription event.
                     peerConnectionClient.createOffer(clientId, peerClientId);
                 }else{
+                    /**
+                     * 이곳에서 sdp 세팅
+                     */
+                    onRemoteDescription(sdp, senderId, targetId, type);
+
                     logAndToast("Creating ANSWER...");
                     peerConnectionClient.createAnswer();
                 }
             }
         });
+    }
+
+    @Override
+    public void onOffer(String senderId, String targetId, String type, SessionDescription sdp) {
+        PeerConnectionClient peerConnectionclient =  peerConnections.get(senderId);
+        /**
+         * 해당 peer가 없을 경우에만 생성합니다.
+         */
+        if(peerConnectionclient == null){
+            createPeerConnectionInternal(false, senderId, sdp, senderId, targetId, type);
+        }
     }
 
     @Override
@@ -1225,11 +1077,15 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                      * Socket ClientId 와 Initiator 가 같을 경우에만
                      * 존재하지 않는 피어들을 생성 시키자.
                      */
-                    if(userModel.clientId.equals(initiator)){
+                    if(clientId.equals(initiator)){
                         // peer가 존재하지 않을 경우 생성
                         if(!checkExistPeer(peerClientId)){
                             Log.d(TAG, "Peer 생성시키자^^");
-                            onConnectedToRoomInternal(true, peerClientId);
+                            if(factory == null){
+                                Log.d(TAG, "아직 팩토리가 생성되지 않았음");
+                                return;
+                            }
+                            createPeerConnectionInternal(true, peerClientId , null, null, null, null);
                         }
 
                     }
@@ -1239,7 +1095,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     private boolean checkExistPeer(String clientId){
-        Iterator<String> keys = PeerConnections.keySet().iterator();
+        Iterator<String> keys = peerConnections.keySet().iterator();
         boolean isExist = false;
         while(keys.hasNext()){
             String keyClientId = keys.next();
@@ -1257,15 +1113,22 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-//                onConnectedToRoomInternal(params);
+//                createPeerConnectionInternal(params);
             }
         });
     }
 
 
+
+
     @Override
-    public void onRemoteDescription(final SessionDescription desc, String senderId, String targetId) {
+    public void onRemoteDescription(final SessionDescription desc, String senderId, String targetId, String type) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
+        /**
+         * 해당 PeerConnectionClient 가져오기
+         */
+        PeerConnectionClient peerConnectionClient = getPeerConnectionClient(senderId);
+
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1275,7 +1138,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                 }
                 logAndToast("Received remote " + desc.type + ", delay=" + delta + "ms");
                 peerConnectionClient.setRemoteDescription(desc);
-                if (!signalingParameters.initiator) {
+
+                if ("offer".equals(type)) {
                     logAndToast("Creating ANSWER...");
                     // Create answer. Answer SDP will be sent to offering client in
                     // PeerConnectionEvents.onLocalDescription event.
@@ -1286,7 +1150,13 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onRemoteIceCandidate(final IceCandidate candidate) {
+    public void onRemoteIceCandidate(final IceCandidate candidate, String senderId, String targetId) {
+
+        /**
+         * 해당 PeerConnectionClient 가져오기
+         */
+        PeerConnectionClient peerConnectionClient = getPeerConnectionClient(senderId);
+
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1300,7 +1170,13 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onRemoteIceCandidatesRemoved(final IceCandidate[] candidates) {
+    public void onRemoteIceCandidatesRemoved(final IceCandidate[] candidates, String senderId, String targetId) {
+
+        /**
+         * 해당 PeerConnectionClient 가져오기
+         */
+        PeerConnectionClient peerConnectionClient = getPeerConnectionClient(senderId);
+
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1311,6 +1187,10 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                 peerConnectionClient.removeRemoteIceCandidates(candidates);
             }
         });
+    }
+
+    public PeerConnectionClient getPeerConnectionClient(String clientId){
+        return peerConnections.get(clientId);
     }
 
     @Override
@@ -1336,7 +1216,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     // All callbacks are invoked from peer connection client looper thread and
     // are routed to UI thread.
     @Override
-    public void onLocalDescription(final SessionDescription desc, boolean isInitiator, String senderId, String targetId) {
+    public void onLocalDescription(final SessionDescription desc, boolean isInitiator, String senderId, String targetId, PeerConnectionClient peerConnectionClient) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
         runOnUiThread(new Runnable() {
             @Override
@@ -1358,24 +1238,24 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onIceCandidate(final IceCandidate candidate) {
+    public void onIceCandidate(final IceCandidate candidate, String peerClientId) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 if (appRtcClient != null) {
-                    appRtcClient.sendLocalIceCandidate(candidate);
+                    appRtcClient.sendLocalIceCandidate(candidate, clientId, peerClientId);
                 }
             }
         });
     }
 
     @Override
-    public void onIceCandidatesRemoved(final IceCandidate[] candidates) {
+    public void onIceCandidatesRemoved(final IceCandidate[] candidates, String peerClientId) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 if (appRtcClient != null) {
-                    appRtcClient.sendLocalIceCandidateRemovals(candidates);
+                    appRtcClient.sendLocalIceCandidateRemovals(candidates, clientId, peerClientId);
                 }
             }
         });
@@ -1403,20 +1283,20 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
     }
 
     @Override
-    public void onConnected() {
+    public void onConnected(PeerConnectionClient peerConnectionClient) {
         final long delta = System.currentTimeMillis() - callStartedTimeMs;
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 logAndToast("DTLS connected, delay=" + delta + "ms");
                 connected = true;
-                callConnected();
+                callConnected(peerConnectionClient);
             }
         });
     }
 
     @Override
-    public void onDisconnected() {
+    public void onDisconnected(PeerConnectionClient peerConnectionClient) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {

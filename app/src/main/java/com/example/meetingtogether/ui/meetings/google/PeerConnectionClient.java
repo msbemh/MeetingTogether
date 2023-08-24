@@ -288,13 +288,17 @@ public class PeerConnectionClient {
    * Create a PeerConnectionClient with the specified parameters. PeerConnectionClient takes
    * ownership of `eglBase`.
    */
-  public PeerConnectionClient(Context appContext, EglBase eglBase, PeerConnectionEvents events, boolean isDataChannelEnabled, CustomPeerConnectionFactory.PeerConnectionParameters peerConnectionParameters, PeerConnectionFactory factory) {
+  public PeerConnectionClient(Context appContext, EglBase eglBase, PeerConnectionEvents events, boolean isDataChannelEnabled,
+                              CustomPeerConnectionFactory.PeerConnectionParameters peerConnectionParameters, PeerConnectionFactory factory,
+                              String senderId, String targetId) {
     this.rootEglBase = eglBase;
     this.appContext = appContext;
     this.events = events;
     this.dataChannelEnabled = isDataChannelEnabled;
     this.peerConnectionParameters = peerConnectionParameters;
     this.factory = factory;
+    this.senderId = senderId;
+    this.targetId = targetId;
     createMediaConstraints();
   }
 
@@ -679,6 +683,7 @@ public class PeerConnectionClient {
             AUDIO_CODEC_OPUS, false, sdp, peerConnectionParameters.audioStartBitrate);
       }
       Log.d(TAG, "Set remote SDP.");
+      Log.d(TAG, "[setRemoteDescription]desc.type:" + desc.type);
       SessionDescription sdpRemote = new SessionDescription(desc.type, sdp);
       peerConnection.setRemoteDescription(sdpObserver, sdpRemote);
     });
@@ -1065,10 +1070,14 @@ public class PeerConnectionClient {
     }
 
     @Override
-    public void onAddStream(final MediaStream stream) {}
+    public void onAddStream(final MediaStream stream) {
+      Log.d("TEST", "[onAddStream]stream:" + stream);
+    }
 
     @Override
-    public void onRemoveStream(final MediaStream stream) {}
+    public void onRemoveStream(final MediaStream stream) {
+      Log.d("TEST", "[onRemoveStream]stream:" + stream);
+    }
 
     @Override
     public void onDataChannel(final DataChannel dc) {
@@ -1105,12 +1114,16 @@ public class PeerConnectionClient {
 
     @Override
     public void onRenegotiationNeeded() {
+      Log.d(TAG, "[onRenegotiationNeeded]");
       // No need to do anything; AppRTC follows a pre-agreed-upon
       // signaling/negotiation protocol.
     }
 
     @Override
-    public void onAddTrack(final RtpReceiver receiver, final MediaStream[] mediaStreams) {}
+    public void onAddTrack(final RtpReceiver receiver, final MediaStream[] mediaStreams) {
+      Log.d("TEST", "[onAddTrack] receiver" + receiver);
+      Log.d("TEST", "[onAddTrack] mediaStreams" + mediaStreams);
+    }
 
 //    @Override
 //    public void onRemoveTrack(final RtpReceiver receiver) {}
@@ -1137,6 +1150,7 @@ public class PeerConnectionClient {
       executor.execute(() -> {
         if (peerConnection != null && !isError) {
           Log.d(TAG, "Set local SDP from " + desc.type);
+          Log.d(TAG, "sdp.description" + desc.description);
           peerConnection.setLocalDescription(sdpObserver, newDesc);
         }
       });
@@ -1148,6 +1162,7 @@ public class PeerConnectionClient {
         if (peerConnection == null || isError) {
           return;
         }
+        Log.d(TAG, "[onSetSuccess] isInitiator:" + PeerConnectionClient.this.isInitiator);
         if (PeerConnectionClient.this.isInitiator) {
           // For offering peer connection we first create offer and set
           // local SDP, then after receiving answer set remote SDP.

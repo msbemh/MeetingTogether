@@ -326,7 +326,7 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
         if(!"".equals(json.optString("targetId"))) targetId = json.optString("targetId");
         SessionDescription sdp = null;
         if(!"".equals(json.optString("sdp"))) sdp = new SessionDescription(
-                SessionDescription.Type.fromCanonicalForm("offer"), json.optString("sdp"));
+                SessionDescription.Type.fromCanonicalForm(type), json.optString("sdp"));
 
         /**
          * 웹소켓 연결 확인
@@ -377,7 +377,14 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
 
         // type : answer
         } else if (type.equals("answer")) {
-          events.onRemoteDescription(sdp, senderId, targetId, type);
+          Log.d("TEST", "[WebSocket] 서버로 부터 받은 senderId:" + senderId);
+          Log.d("TEST", "[WebSocket] 서버로 부터 받은 targetId:" + targetId);
+
+          Log.d("TEST", "[WebSocket] 서로 바꾸기 senderId:" + targetId);
+          Log.d("TEST", "[WebSocket] 서로 바꾸기 targetId:" + senderId);
+
+          Log.d("TEST", "[WebSocket] sdp.type:" + sdp.type);
+          events.onRemoteDescription(sdp, targetId, senderId, type);
 
         // type : offer
         } else if (type.equals("offer")) {
@@ -482,6 +489,6 @@ public class WebSocketRTCClient implements AppRTCClient, WebSocketChannelClient.
   // Converts a JSON candidate to a Java object.
   IceCandidate toJavaCandidate(JSONObject json) throws JSONException {
     return new IceCandidate(
-        json.getString("id"), json.getInt("label"), json.getString("candidate"));
+        json.optString("id"), json.optInt("label"), json.optString("candidate"));
   }
 }

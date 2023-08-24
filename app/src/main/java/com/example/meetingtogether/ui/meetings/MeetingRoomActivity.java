@@ -227,7 +227,10 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
 //            Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.CAMERA,
             Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.FOREGROUND_SERVICE
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.MODIFY_AUDIO_SETTINGS,
+            Manifest.permission.INTERNET
     };
 
     /**
@@ -811,8 +814,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             return;
         }
         // Enable statistics callback.
-        peerConnectionClient.enableStatsEvents(true, STAT_CALLBACK_PERIOD);
-        setSwappedFeeds(false /* isSwappedFeeds */);
+//        peerConnectionClient.enableStatsEvents(true, STAT_CALLBACK_PERIOD);
+//        setSwappedFeeds(false /* isSwappedFeeds */);
     }
 
     // This method is called when the audio manager reports audio device change,
@@ -973,7 +976,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
          * Peer 연결 클라이언트 생성
          */
         PeerConnectionClient peerConnectionClient = new PeerConnectionClient(
-                getApplicationContext(), eglBase, MeetingRoomActivity.this, peerConnectionParameters.dataChannelParameters != null, peerConnectionParameters, factory);
+                getApplicationContext(), eglBase, MeetingRoomActivity.this, peerConnectionParameters.dataChannelParameters != null, peerConnectionParameters, factory, senderId, targetId);
         peerConnectionClient.createPeerConnection(
                 localProxyVideoSink, remoteSinks, videoCapturer, isInitiator, peerClientId, sdp,
                 senderId, targetId, type);
@@ -1008,13 +1011,18 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                Log.d(TAG, "onPeerCreated");
+
                 /**
                  * 피어 생성되면
                  * Map<String, PeerConnectionClient> PeerConnections 에서 관리 한다.
                  */
                 if(peerConnections.get(peerClientId) == null){
+                    Log.d(TAG, "[onPeerCreated] 추가 peerClientId:" + peerClientId);
+                    Log.d(TAG, "[onPeerCreated] 추가 peerConnectionClient:" + peerConnectionClient);
                     peerConnections.put(peerClientId, peerConnectionClient);
                 }
+                Log.d(TAG, "[onPeerCreated] peerConnections:" + peerConnections);
 
                 if(isInitiator){
                     logAndToast("Creating OFFER...");
@@ -1027,8 +1035,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
                      */
                     onRemoteDescription(sdp, senderId, targetId, type);
 
-                    logAndToast("Creating ANSWER...");
-                    peerConnectionClient.createAnswer();
+//                    logAndToast("Creating ANSWER...");
+//                    peerConnectionClient.createAnswer();
                 }
             }
         });
@@ -1041,13 +1049,18 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
          * 해당 peer가 없을 경우에만 생성합니다.
          */
         if(peerConnectionclient == null){
-            createPeerConnectionInternal(false, senderId, sdp, senderId, targetId, type);
+            Log.d(TAG, "[onOffer] 서버로 부터 받은 senderId:" + senderId);
+            Log.d(TAG, "[onOffer] 서버로 부터 받은 targetId:" + targetId);
+            Log.d(TAG, "[onOffer] senderId => " + targetId);
+            Log.d(TAG, "[onOffer] targetId => " + senderId);
+            createPeerConnectionInternal(false, senderId, sdp, targetId, senderId, type);
         }
     }
 
     @Override
     public void onWebSocketConnected(String clientId) {
         this.clientId = clientId;
+        Log.d(TAG, "[나의 아이디]:" + this.clientId);
         this.appRtcClient.joinRoom(roomId);
     }
 
@@ -1127,7 +1140,12 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         /**
          * 해당 PeerConnectionClient 가져오기
          */
-        PeerConnectionClient peerConnectionClient = getPeerConnectionClient(senderId);
+        PeerConnectionClient peerConnectionClient = getPeerConnectionClient(targetId);
+        Log.d(TAG, "[onRemoteDescription] type:" + type);
+        Log.d(TAG, "[onRemoteDescription] senderId:" + senderId);
+        Log.d(TAG, "[onRemoteDescription] targetId:" + targetId);
+        Log.d(TAG, "[onRemoteDescription] peerConnectionClient:" + peerConnectionClient);
+        Log.d(TAG, "[onRemoteDescription] sdp.description" + desc.description);
 
         runOnUiThread(new Runnable() {
             @Override

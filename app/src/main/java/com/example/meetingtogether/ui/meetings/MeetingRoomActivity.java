@@ -814,8 +814,8 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
             return;
         }
         // Enable statistics callback.
-//        peerConnectionClient.enableStatsEvents(true, STAT_CALLBACK_PERIOD);
-//        setSwappedFeeds(false /* isSwappedFeeds */);
+        peerConnectionClient.enableStatsEvents(true, STAT_CALLBACK_PERIOD);
+        setSwappedFeeds(false /* isSwappedFeeds */);
     }
 
     // This method is called when the audio manager reports audio device change,
@@ -1145,7 +1145,7 @@ public class MeetingRoomActivity extends AppCompatActivity implements AppRTCClie
         Log.d(TAG, "[onRemoteDescription] senderId:" + senderId);
         Log.d(TAG, "[onRemoteDescription] targetId:" + targetId);
         Log.d(TAG, "[onRemoteDescription] peerConnectionClient:" + peerConnectionClient);
-        Log.d(TAG, "[onRemoteDescription] sdp.description" + desc.description);
+//        Log.d(TAG, "[onRemoteDescription] sdp.description" + desc.description);
 
         runOnUiThread(new Runnable() {
             @Override

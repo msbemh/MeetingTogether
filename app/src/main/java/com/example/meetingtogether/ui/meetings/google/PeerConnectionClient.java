@@ -1080,6 +1080,10 @@ public class PeerConnectionClient {
     }
 
     @Override
+    public void onTrack(RtpTransceiver transceiver) {
+    }
+
+    @Override
     public void onDataChannel(final DataChannel dc) {
       Log.d(TAG, "New Data channel " + dc.label());
 

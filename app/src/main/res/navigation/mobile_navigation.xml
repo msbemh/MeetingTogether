@@ -19,7 +19,7 @@
 
     <fragment
         android:id="@+id/navigation_meeting"
-        android:name="com.example.meetingtogether.ui.meetings.MeetingListFragment"
+        android:name="com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment"
         android:label="@string/title_meeting"
         tools:layout="@layout/fragment_meetinglist" />
 </navigation>

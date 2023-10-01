@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.meetingtogether"
-        minSdk 27
+        minSdk 26
         targetSdk 33
         versionCode 1
         versionName "1.0"
@@ -28,6 +28,9 @@ android {
     }
     buildFeatures {
         viewBinding true
+    }
+    dataBinding {
+        enabled = true
     }
 }
 
@@ -53,6 +56,11 @@ dependencies {
 
     // Web RTC
     implementation 'org.webrtc:google-webrtc:1.0.32006'
-
     implementation files('libs/autobanh.jar')
+
+    implementation ('io.socket:socket.io-client:2.1.0') {
+        exclude group: 'org.json', module: 'json'
+    }
+
+    implementation 'pub.devrel:easypermissions:1.1.3'
 }

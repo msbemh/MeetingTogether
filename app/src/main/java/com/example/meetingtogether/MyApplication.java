@@ -39,6 +39,9 @@ public class MyApplication extends Application {
         color = ContextCompat.getColor(this, R.color.purple);
         colorTypeIntegerEnumMap.put(ColorType.PURPLE, color);
 
+        color = ContextCompat.getColor(this, R.color.white);
+        colorTypeIntegerEnumMap.put(ColorType.ERASER, color);
+
 
         /**
          * 이곳에 메인 채팅 관련 서비스를 생성하고 바인딩 시키는게 좋을 듯 하다

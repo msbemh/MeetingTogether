@@ -1,6 +1,5 @@
 package com.example.meetingtogether.ui.meetings;
 
-import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -16,25 +15,25 @@ import com.example.meetingtogether.MyApplication;
 import com.example.meetingtogether.common.ColorType;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
 import com.example.meetingtogether.ui.meetings.DTO.DrawingModel;
-import com.example.meetingtogether.ui.meetings.DTO.PeerDrawing;
 
 import org.webrtc.DataChannel;
-import org.webrtc.PeerConnection;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoFrame;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Vector;
 
 public class DrawingView extends SurfaceViewRenderer {
-    private List<DrawingModel> drawingModelList = new ArrayList<>();
+    private Vector<DrawingModel> drawingModelVector = new Vector<>();
+
+    private Map<String, DrawingModel> currentDrawingMap = new HashMap<>();
 
     private String TAG = "TEST";
     private Context context;
     private Bitmap bitmap;
-    public DrawingModel currentDrawingModel;
-    private List<PeerDrawing> peerDrawingList = new ArrayList<>();
+
 
     public DrawingView(Context context, AttributeSet attrs, ColorModel colorModel) {
         super(context, attrs);
@@ -44,12 +43,9 @@ public class DrawingView extends SurfaceViewRenderer {
         Path path = new Path();
         Paint paint = createPaint(colorModel);
 
-        currentDrawingModel = new DrawingModel(path, paint, colorModel.getColorType());
-        drawingModelList.add(currentDrawingModel);
-
-        for(CustomPeerConnection customPeerConnection : MeetingRoomActivity.peerConnections){
-            peerDrawingList.add(new PeerDrawing(customPeerConnection.getClientId()));
-        }
+        DrawingModel drawingModel = new DrawingModel(path, paint, colorModel.getColorType(), "local");
+        drawingModelVector.add(drawingModel);
+        currentDrawingMap.put("local", drawingModel);
 
         setWillNotDraw(false);
         setBackgroundColor(Color.WHITE);
@@ -61,18 +57,10 @@ public class DrawingView extends SurfaceViewRenderer {
         paint.setColor(MyApplication.colorTypeIntegerEnumMap.get(colorModel.getColorType()));
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setStrokeWidth(5f);
+        if(colorModel.getColorType() == ColorType.ERASER) paint.setStrokeWidth(30f);
+        else paint.setStrokeWidth(5f);
 
         return paint;
-    }
-
-    public PeerDrawing getPeerDrawing(String clientId){
-        for(PeerDrawing peerDrawing : peerDrawingList){
-            if(clientId.equals(peerDrawing.getClientId())){
-                return peerDrawing;
-            }
-        }
-        return null;
     }
 
     @Override
@@ -81,21 +69,15 @@ public class DrawingView extends SurfaceViewRenderer {
 
         if(bitmap != null){
             canvas.drawBitmap(bitmap, 0, 0, null);
-//            bitmap = null;
         }
 
-        // 로컬에 있는 페인팅 경로 그리기
-        for(DrawingModel drawingModel : drawingModelList){
+        for(DrawingModel drawingModel : drawingModelVector){
+            Log.d(TAG, "drawingModel:" + drawingModel);
+            Log.d(TAG, "paint:" + drawingModel.getPaint());
+            Log.d(TAG, "color:" + drawingModel.getPaint().getColor());
             canvas.drawPath(drawingModel.getPath(), drawingModel.getPaint());
         }
 
-        // 상대방 피어에 있는 모든 페인팅 경로 그리기
-        for(PeerDrawing peerDrawing : peerDrawingList){
-            List<DrawingModel> drawingModelList = peerDrawing.getDrawingModelList();
-            for(DrawingModel drawingModel : drawingModelList){
-                canvas.drawPath(drawingModel.getPath(), drawingModel.getPaint());
-            }
-        }
     }
 
     @Override
@@ -128,23 +110,24 @@ public class DrawingView extends SurfaceViewRenderer {
         // 마우스 이벤트 처리
         float x = event.getX();
         float y = event.getY();
+        DrawingModel currentLocalDrawingModel = currentDrawingMap.get("local");
 
-
+        // 연결된 피어 모두애게 그리기 정보를 보낸다.
         for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++){
             CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
             DataChannel dataChannel = customPeerConnection.getDataChannel();
             String cmd = "draw";
-            String data = cmd + ";" + x + ";" + y + ";" +  currentDrawingModel.getColorType() + ";" + event.getAction();
+            String data = cmd + ";" + x + ";" + y + ";" +  currentLocalDrawingModel.getColorType() + ";" + event.getAction();
             ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
             dataChannel.send(new DataChannel.Buffer(buffer, false));
         }
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                currentDrawingModel.getPath().moveTo(x, y);
+                currentLocalDrawingModel.getPath().moveTo(x, y);
                 return true;
             case MotionEvent.ACTION_MOVE:
-                currentDrawingModel.getPath().lineTo(x, y);
+                currentLocalDrawingModel.getPath().lineTo(x, y);
                 break;
             case MotionEvent.ACTION_UP:
                 // 그리기 완료
@@ -164,55 +147,35 @@ public class DrawingView extends SurfaceViewRenderer {
         invalidate(); // 뷰 다시 그리기 요청
     }
 
-    public void syncPeer(){
-        List<String> tempList = new ArrayList<>();
-        // 추가
-        for(CustomPeerConnection customPeerConnection : MeetingRoomActivity.peerConnections){
-            Boolean isExist = isExistPeer(customPeerConnection);
-            if(isExist) {
-                tempList.add(customPeerConnection.getClientId());
-            }else{
-                peerDrawingList.add(new PeerDrawing(customPeerConnection.getClientId()));
-            }
-        }
-
-        // 제거
-        for(int i=tempList.size(); i>=0; i--){
-
-        }
-    }
-
-    private Boolean isExistPeer(CustomPeerConnection customPeerConnection){
-        for(PeerDrawing peerDrawing : peerDrawingList){
-            if(customPeerConnection.getClientId().equals(peerDrawing.getClientId())){
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-
     public void fireDraw(float x, float y, ColorType colorType, String clientId, Integer motion) {
         Log.d(TAG, "fireDraw");
 
-        PeerDrawing peerDrawing = getPeerDrawing(clientId);
-
-        if(peerDrawing != null && peerDrawing.getCurrentDrawingModel().getColorType() != colorType){
+        DrawingModel opponentDrawingModel = currentDrawingMap.get(clientId);
+        if(opponentDrawingModel == null){
             // 그리기에 사용할 Path와 Paint 객체 초기화
             Path path = new Path();
             Paint paint = createPaint(new ColorModel(colorType));
 
-            currentDrawingModel = new DrawingModel(path, paint, colorType);
-            peerDrawing.getDrawingModelList().add(currentDrawingModel);
+            opponentDrawingModel = new DrawingModel(path, paint, colorType, clientId);
+            currentDrawingMap.put(clientId, opponentDrawingModel);
+            drawingModelVector.add(opponentDrawingModel);
+        }else{
+            if(!opponentDrawingModel.getColorType().equals(colorType)){
+                Path path = new Path();
+                Paint paint = createPaint(new ColorModel(colorType));
+
+                opponentDrawingModel = new DrawingModel(path, paint, colorType, clientId);
+                currentDrawingMap.put(clientId, opponentDrawingModel);
+                drawingModelVector.add(opponentDrawingModel);
+            }
         }
 
         switch (motion) {
             case MotionEvent.ACTION_DOWN:
-                currentDrawingModel.getPath().moveTo(x, y);
+                opponentDrawingModel.getPath().moveTo(x, y);
                 return;
             case MotionEvent.ACTION_MOVE:
-                currentDrawingModel.getPath().lineTo(x, y);
+                opponentDrawingModel.getPath().lineTo(x, y);
                 break;
             case MotionEvent.ACTION_UP:
                 // 그리기 완료
@@ -231,7 +194,8 @@ public class DrawingView extends SurfaceViewRenderer {
         Path path = new Path();
         Paint paint = createPaint(colorModel);
 
-        currentDrawingModel = new DrawingModel(path, paint, colorModel.getColorType());
-        drawingModelList.add(currentDrawingModel);
+        DrawingModel drawingModel = new DrawingModel(path, paint, colorModel.getColorType(), "local");
+        currentDrawingMap.put("local", drawingModel);
+        drawingModelVector.add(drawingModel);
     }
 }

@@ -68,45 +68,46 @@ public class ColorDialogFragment extends DialogFragment {
         dialogView.findViewById(R.id.orange_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.orange);
                 colorDialogListener.onClick(new ColorModel(ColorType.ORANGE));
             }
         });
         dialogView.findViewById(R.id.yellow_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.yellow);
                 colorDialogListener.onClick(new ColorModel(ColorType.YELLOW));
             }
         });
         dialogView.findViewById(R.id.green_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.green);
                 colorDialogListener.onClick(new ColorModel(ColorType.GREEN));
             }
         });
         dialogView.findViewById(R.id.blue_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.blue);
                 colorDialogListener.onClick(new ColorModel(ColorType.BLUE));
             }
         });
         dialogView.findViewById(R.id.indigo_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.indigo);
                 colorDialogListener.onClick(new ColorModel(ColorType.INDIGO));
             }
         });
         dialogView.findViewById(R.id.purple_view).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                int color = ContextCompat.getColor(getActivity(), R.color.purple);
                 colorDialogListener.onClick(new ColorModel(ColorType.PURPLE));
             }
         });
+        dialogView.findViewById(R.id.eraser_view).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                colorDialogListener.onClick(new ColorModel(ColorType.ERASER));
+            }
+        });
+
 
         // Pass null as the parent view because its going in the dialog layout
         builder.setView(dialogView);

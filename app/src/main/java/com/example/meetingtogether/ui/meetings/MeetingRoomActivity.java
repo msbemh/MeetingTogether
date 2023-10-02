@@ -658,6 +658,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
         peerConnections.add(customPeerConnection);
         Log.d(TAG, "customPeerConnection:" + customPeerConnection);
 
+        // 화이트보드 view 피어와 싱크 맞추기
+//        if(drawingView != null) drawingView.syncPeer();
+
         return customPeerConnection;
     }
 
@@ -1418,6 +1421,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 peerConnections.remove(i);
                 String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
                 Log.d(TAG, tagFlag + "peerConnections 에서 제거");
+
+                // 화이트보드 view 피어와 싱크 맞추기
+//                if(drawingView != null) drawingView.syncPeer();
             }
         }
     }
@@ -2053,9 +2059,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 ColorType colorType = ColorType.valueOf(splitData[3]);
                                 Integer motion = Integer.parseInt(splitData[4]);
 
-//                                ColorType colorType = MeetingRoomActivity.this.drawingView.currentDrawingModel.getColorType();
-//                                String colorTypeName = colorType.name();
-
                                 Log.d(TAG, "x:" + x + ", y:" + y + ", colorType:" + colorType +  ", motion:" + motion);
 
                                 MeetingRoomActivity.this.drawingView.fireDraw(x, y, colorType, clientId, motion);
@@ -2228,6 +2231,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                     peerConnections.remove(i);
                     Log.d(TAG, tagFlag + "peerConnections 에서 제거:" + peerConnections);
+
+                    // 화이트보드 view 피어와 싱크 맞추기
+//                    if(drawingView != null && type.equals(Common.VIDEO)) drawingView.syncPeer();
                 }
             }
 

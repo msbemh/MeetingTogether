@@ -69,6 +69,13 @@
             android:layout_height="50dp"
             android:layout_margin="5dp"
             android:background="@color/purple"></View>
+        <ImageView
+            android:id="@+id/eraser_view"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_margin="5dp"
+            android:src="@drawable/eraser">
+        </ImageView>
     </GridLayout>
 
 

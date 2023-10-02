@@ -164,12 +164,41 @@ public class DrawingView extends SurfaceViewRenderer {
         invalidate(); // 뷰 다시 그리기 요청
     }
 
+    public void syncPeer(){
+        List<String> tempList = new ArrayList<>();
+        // 추가
+        for(CustomPeerConnection customPeerConnection : MeetingRoomActivity.peerConnections){
+            Boolean isExist = isExistPeer(customPeerConnection);
+            if(isExist) {
+                tempList.add(customPeerConnection.getClientId());
+            }else{
+                peerDrawingList.add(new PeerDrawing(customPeerConnection.getClientId()));
+            }
+        }
+
+        // 제거
+        for(int i=tempList.size(); i>=0; i--){
+
+        }
+    }
+
+    private Boolean isExistPeer(CustomPeerConnection customPeerConnection){
+        for(PeerDrawing peerDrawing : peerDrawingList){
+            if(customPeerConnection.getClientId().equals(peerDrawing.getClientId())){
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+
     public void fireDraw(float x, float y, ColorType colorType, String clientId, Integer motion) {
         Log.d(TAG, "fireDraw");
 
         PeerDrawing peerDrawing = getPeerDrawing(clientId);
 
-        if(peerDrawing.getCurrentDrawingModel().getColorType() != colorType){
+        if(peerDrawing != null && peerDrawing.getCurrentDrawingModel().getColorType() != colorType){
             // 그리기에 사용할 Path와 Paint 객체 초기화
             Path path = new Path();
             Paint paint = createPaint(new ColorModel(colorType));

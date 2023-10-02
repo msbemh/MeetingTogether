@@ -2056,7 +2056,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //                                ColorType colorType = MeetingRoomActivity.this.drawingView.currentDrawingModel.getColorType();
 //                                String colorTypeName = colorType.name();
 
-                                Log.d(TAG, "x:" + x + ", y:" + y + "colorType" + colorType +  "motion:" + motion);
+                                Log.d(TAG, "x:" + x + ", y:" + y + ", colorType:" + colorType +  ", motion:" + motion);
 
                                 MeetingRoomActivity.this.drawingView.fireDraw(x, y, colorType, clientId, motion);
                             }else if("img_req".equals(cmd)){

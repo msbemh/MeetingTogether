@@ -13,6 +13,8 @@ import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.PointF;
+import android.graphics.Rect;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
@@ -22,6 +24,7 @@ import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
@@ -34,6 +37,7 @@ import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -48,6 +52,7 @@ import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
+import org.webrtc.EglRenderer;
 import org.webrtc.IceCandidate;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
@@ -61,6 +66,7 @@ import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoDecoderFactory;
 import org.webrtc.VideoEncoderFactory;
+import org.webrtc.VideoFrame;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 import org.webrtc.audio.AudioDeviceModule;
@@ -74,6 +80,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import io.socket.client.IO;
 import io.socket.client.Socket;
@@ -94,6 +102,16 @@ import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
 import com.example.meetingtogether.ui.meetings.fragments.PeersFragment;
 import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
 import com.example.meetingtogether.ui.meetings.DTO.UserModel;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceContour;
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
+import com.google.mlkit.vision.face.FaceLandmark;
 
 public class MeetingRoomActivity extends AppCompatActivity {
     private static final String TAG = "TEST";
@@ -159,6 +177,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private String whiteboardId;
     private String whiteboardStatus;
     private DrawingView drawingView;
+    private FaceDetector detector;
 
     /**
      * 필요한 권한
@@ -538,6 +557,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        binding.faceMaskButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                faceListenerSetting();
+            }
+        });
+
         binding.testButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -554,6 +580,26 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //                }
             }
         });
+
+        /**
+         * 얼굴 인식 옵션 초기화
+         */
+        // High-accuracy landmark detection and face classification
+        FaceDetectorOptions highAccuracyOpts =
+                new FaceDetectorOptions.Builder()
+                        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                        .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                        .build();
+
+        // Real-time contour detection
+        FaceDetectorOptions realTimeOpts =
+                new FaceDetectorOptions.Builder()
+                        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+                        .build();
+
+        detector = FaceDetection.getClient(highAccuracyOpts);
+
 
 //        drawingView = new DrawingView(this, null);
 //        binding.frameLayout.addView(drawingView);
@@ -596,6 +642,77 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //            }
 //        });
     }
+
+    private void faceListenerSetting(){
+//        VideoFrame videoFrame = new VideoFrame();
+
+        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
+            @Override
+            public void onFrame(Bitmap bitmap) {
+                Log.d(TAG, "bitmap:" + bitmap);
+                InputImage image = InputImage.fromBitmap(bitmap, 0);
+                Log.d(TAG, "image:" + image);
+
+                Task<List<Face>> result =
+                        detector.process(image)
+                                .addOnSuccessListener(
+                                        new OnSuccessListener<List<Face>>() {
+                                            @Override
+                                            public void onSuccess(List<Face> faces) {
+                                                Log.d(TAG, "faces:" + faces);
+                                                calculateFaceInfo(faces);
+                                            }
+                                        })
+                                .addOnFailureListener(
+                                        new OnFailureListener() {
+                                            @Override
+                                            public void onFailure(@NonNull Exception e) {
+                                                e.printStackTrace();
+                                                Log.e(TAG, "e:" + e.getMessage());
+                                            }
+                                        });
+            }
+        }, 1);
+//        Timer timer = new Timer();
+//
+//        TimerTask task = new TimerTask() {
+//            @Override
+//            public void run() {
+//
+//            }
+//        };
+//
+//        // 5초 후에 작업을 실행
+//        timer.schedule(task, 1000);
+    }
+
+    private void calculateFaceInfo(List<Face> faces){
+        for (Face face : faces) {
+            Rect bounds = face.getBoundingBox();
+            float rotY = face.getHeadEulerAngleY();  // Head is rotated to the right rotY degrees
+            float rotZ = face.getHeadEulerAngleZ();  // Head is tilted sideways rotZ degrees
+
+            // If landmark detection was enabled (mouth, ears, eyes, cheeks, and
+            // nose available):
+            FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
+            if (leftEye != null) {
+                PointF leftEyePos = leftEye.getPosition();
+                Log.d(TAG, "leftEyePos:" + leftEyePos);
+            }
+
+            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
+            if (rightEye != null) {
+                PointF rightEyePos = rightEye.getPosition();
+                Log.d(TAG, "rightEyePos:" + rightEyePos);
+            }
+
+            // If face tracking was enabled:
+            if (face.getTrackingId() != null) {
+                int id = face.getTrackingId();
+            }
+        }
+    }
+
 
     public void replaceFragment(Fragment fragment) {
         FragmentManager fragmentManager = getSupportFragmentManager();

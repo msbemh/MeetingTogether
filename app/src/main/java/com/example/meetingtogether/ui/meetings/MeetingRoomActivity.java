@@ -11,12 +11,19 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
+import android.opengl.GLES20;
+import android.opengl.GLUtils;
 import android.os.Build;
 import android.os.Bundle;
 
@@ -48,11 +55,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
+import org.webrtc.CapturerObserver;
 import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
 import org.webrtc.EglRenderer;
+import org.webrtc.GlRectDrawer;
+import org.webrtc.GlTextureFrameBuffer;
+import org.webrtc.GlUtil;
 import org.webrtc.IceCandidate;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
@@ -63,15 +74,19 @@ import org.webrtc.RtpReceiver;
 import org.webrtc.SessionDescription;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.SurfaceViewRenderer;
+import org.webrtc.TextureBufferImpl;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoDecoderFactory;
 import org.webrtc.VideoEncoderFactory;
 import org.webrtc.VideoFrame;
+import org.webrtc.VideoFrameDrawer;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
+import org.webrtc.YuvConverter;
 import org.webrtc.audio.AudioDeviceModule;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -102,6 +117,8 @@ import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
 import com.example.meetingtogether.ui.meetings.fragments.PeersFragment;
 import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
 import com.example.meetingtogether.ui.meetings.DTO.UserModel;
+import com.example.meetingtogether.ui.meetings.google.Camera2Capturer;
+import com.example.meetingtogether.ui.meetings.google.CameraCaptureInterface;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -178,6 +195,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private String whiteboardStatus;
     private DrawingView drawingView;
     private FaceDetector detector;
+    private Boolean isFaceMode = false;
+
+    private Paint paint;
 
     /**
      * 필요한 권한
@@ -394,6 +414,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         roomId = getIntent().getStringExtra(ROOMID);
 
+        paint = new Paint();
+        paint.setColor(Color.RED);
+        paint.setAlpha(0xff);
+
         /**
          * 프레그 먼트 세팅
          */
@@ -401,6 +425,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onCreated(FragmentPeersBinding peersBinding) {
                 MeetingRoomActivity.this.peersBinding = peersBinding;
+
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
+                            @Override
+                            public void onFrame(Bitmap bitmap) {
+                                Log.d(TAG, "bitmap:" + bitmap);
+                            }
+                        }, 1);
+                    }
+                }, 1500);
+
             }
 
             @Override
@@ -487,80 +524,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 }
 
                 socket.emit("whiteboard");
-
-//                Intent intent = new Intent(MeetingRoomActivity.this, WhiteboardActivity.class);
-//                startActivity(intent);
-
-
-
-//                if(socket == null){
-//                    Toast.makeText(MeetingRoomActivity.this, "소켓 연길이 되지 않았습니다.",Toast.LENGTH_SHORT).show();
-//                    return;
-//                }
-//
-//                socket.emit("whiteboard");
-//
-//                // 로컬 비디오 트랙 중지
-//                videoTrackSetEnabled(false);
-
-
-//                Bitmap bitmap = getViewBitmap(drawingView);
-//
-//                for (int i = 0; i < peerConnections.size(); i++){
-//                    CustomPeerConnection customPeerConnection = peerConnections.get(i);
-//                    DataChannel dataChannel = customPeerConnection.getDataChannel();
-//
-////                            dataChannel.send(new DataChannel.Buffer(buffer, false));
-//
-//                    byte[] data = Common.bitmapToByteArray(bitmap);
-//
-//                    ByteBuffer buffer = ByteBuffer.wrap(data);
-//                    dataChannel.send(new DataChannel.Buffer(buffer, true));
-//                }
-
-
-
-//                drawingView.addFrameListener(new EglRenderer.FrameListener() {
-//                    @Override
-//                    public void onFrame(Bitmap bitmap) {
-//                        Log.d(TAG, "bitmap:" + bitmap);
-//
-//
-//
-//                        for (int i = 0; i < peerConnections.size(); i++){
-//                            CustomPeerConnection customPeerConnection = peerConnections.get(i);
-//                            DataChannel dataChannel = customPeerConnection.getDataChannel();
-//
-////                            dataChannel.send(new DataChannel.Buffer(buffer, false));
-//
-//                            byte[] data = Common.bitmapToByteArray(bitmap);
-//
-//                            ByteBuffer buffer = ByteBuffer.wrap(data);
-//                            dataChannel.send(new DataChannel.Buffer(buffer, true));
-//                        }
-//
-//                        runOnUiThread(() -> {
-//                            drawingView.removeFrameListener(this);
-//                        });
-//                    }
-//                }, 1);
-
-
-//                for (int i = 0; i < peerConnections.size(); i++){
-//                    CustomPeerConnection customPeerConnection = peerConnections.get(i);
-//                    DataChannel dataChannel = customPeerConnection.getDataChannel();
-//
-//                    String data = "hello world";
-//                    ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
-//                    dataChannel.send(new DataChannel.Buffer(buffer, false));
-//                }
             }
         });
 
         binding.faceMaskButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                faceListenerSetting();
+                if(!isFaceMode){
+                    isFaceMode = true;
+                }else{
+                    isFaceMode = false;
+                }
             }
         });
 
@@ -599,94 +573,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         .build();
 
         detector = FaceDetection.getClient(highAccuracyOpts);
-
-
-//        drawingView = new DrawingView(this, null);
-//        binding.frameLayout.addView(drawingView);
-
-
-
-//        SurfaceHolder surfaceHolder = binding.drawingView.getHolder();
-//
-//        // 화이트보드 테스트
-//        surfaceHolder.addCallback(new SurfaceHolder.Callback() {
-//            @Override
-//            public void surfaceCreated(SurfaceHolder holder) {
-//                Log.d(TAG, "surfaceCreated 동작");
-//                // Surface가 생성되었을 때 호출되는 부분
-//                // 그리기 작업을 수행합니다.
-//                Canvas canvas = holder.lockCanvas();
-//
-//                Paint paint = new Paint();
-//                paint.setAntiAlias(true);
-//                paint.setColor(Color.WHITE);
-//                paint.setStyle(Paint.Style.STROKE);
-//                paint.setStrokeJoin(Paint.Join.ROUND);
-//                paint.setStrokeWidth(5f);
-//
-//                canvas.drawCircle(100,100, 100, paint);
-//                // 그리기 코드 작성
-//                holder.unlockCanvasAndPost(canvas);
-//            }
-//
-//            @Override
-//            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-//                Log.d(TAG, "surfaceChanged 동작");
-//                // Surface의 크기나 포맷이 변경되었을 때 호출되는 부분
-//            }
-//
-//            @Override
-//            public void surfaceDestroyed(SurfaceHolder holder) {
-//                Log.d(TAG, "surfaceDestroyed 동작");
-//                // Surface가 파괴되기 전에 호출되는 부분
-//            }
-//        });
     }
 
-    private void faceListenerSetting(){
-//        VideoFrame videoFrame = new VideoFrame();
+    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap, FaceListener faceListener){
+        Canvas canvas = new Canvas(bitmap);
 
-        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
-            @Override
-            public void onFrame(Bitmap bitmap) {
-                Log.d(TAG, "bitmap:" + bitmap);
-                InputImage image = InputImage.fromBitmap(bitmap, 0);
-                Log.d(TAG, "image:" + image);
-
-                Task<List<Face>> result =
-                        detector.process(image)
-                                .addOnSuccessListener(
-                                        new OnSuccessListener<List<Face>>() {
-                                            @Override
-                                            public void onSuccess(List<Face> faces) {
-                                                Log.d(TAG, "faces:" + faces);
-                                                calculateFaceInfo(faces);
-                                            }
-                                        })
-                                .addOnFailureListener(
-                                        new OnFailureListener() {
-                                            @Override
-                                            public void onFailure(@NonNull Exception e) {
-                                                e.printStackTrace();
-                                                Log.e(TAG, "e:" + e.getMessage());
-                                            }
-                                        });
-            }
-        }, 1);
-//        Timer timer = new Timer();
-//
-//        TimerTask task = new TimerTask() {
-//            @Override
-//            public void run() {
-//
-//            }
-//        };
-//
-//        // 5초 후에 작업을 실행
-//        timer.schedule(task, 1000);
-    }
-
-    private void calculateFaceInfo(List<Face> faces){
         for (Face face : faces) {
             Rect bounds = face.getBoundingBox();
             float rotY = face.getHeadEulerAngleY();  // Head is rotated to the right rotY degrees
@@ -698,12 +589,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
             if (leftEye != null) {
                 PointF leftEyePos = leftEye.getPosition();
                 Log.d(TAG, "leftEyePos:" + leftEyePos);
+                canvas.drawCircle(leftEyePos.x, leftEyePos.y, 10, paint);
             }
 
             FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
             if (rightEye != null) {
                 PointF rightEyePos = rightEye.getPosition();
                 Log.d(TAG, "rightEyePos:" + rightEyePos);
+                canvas.drawCircle(rightEyePos.x, rightEyePos.y, 10, paint);
             }
 
             // If face tracking was enabled:
@@ -711,6 +604,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 int id = face.getTrackingId();
             }
         }
+
+        faceListener.onSuccess(bitmap);
     }
 
 
@@ -867,62 +762,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
         // 트랙과 view 연동
         bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
 
-        /**
-         * 화이트보드 테스트 코드
-         */
-        // 화이트보드 테스트
-//        createProxySink("local", Common.WHITE_BOARD);
-//        ProxySink proxySink = getProxySink("local", Common.WHITE_BOARD);
-//        String tagFlag = getTagFlagString("local", Common.WHITE_BOARD);
-//        proxySink.setTarget(binding.drawingView);
-//        CustomTrack customTrackTest = getCustomTrack(Common.VIDEO);
-//        VideoTrack videoTrack = customTrackTest.getVideoTrack();
-//        videoTrack.addSink(proxySink);
-
-
-        // 화이트보드 테스트
-        // 화면 렌더링 완료 후 실행할 작업을 여기에 작성하세요.
-//        ViewCapturer viewCapturer = new ViewCapturer(peersBinding.mainSurfaceView, rootEglBase);
-//
-//        SurfaceTextureHelper surfaceTextureHelper =
-//                SurfaceTextureHelper.create("VideoThread", rootEglBase.getEglBaseContext());
-//
-//        // 카메라에서 비디오 소스 생성
-//        VideoSource videoSource = factory.createVideoSource(viewCapturer.isScreencast());
-//
-//        // 카메라 초기화 및 캡처 시작
-//        viewCapturer.initialize(surfaceTextureHelper, MeetingRoomActivity.this, videoSource.getCapturerObserver());
-//        viewCapturer.startCapture(200,200,30);
-//
-//        // 비디오 소스에서 비디오 트랙 추출
-//        VideoTrack videoTrack = factory.createVideoTrack(VIDEO_TRACK_ID, videoSource);
-//        videoTrack.setEnabled(true);
-//
-//        ProxySink proxySink = new ProxySink("test", Common.WHITE_BOARD);
-//
-//        binding.drawingView.init(rootEglBase.getEglBaseContext(), null);
-//        binding.drawingView.setEnableHardwareScaler(true);
-//        binding.drawingView.setMirror(false);
-//
-//        proxySink.setTarget(binding.drawingView);
-//        videoTrack.addSink(proxySink);
-
-        // 로컬 세팅
-//        ProxySink localProxySink = getProxySink("local", Common.VIDEO);
-//        localProxySink.setTarget(peersBinding.mainSurfaceView);
-//        videoTrack.addSink(localProxySink);
-
-
-//        getCustomTrack(Common.VIDEO).getVideoTrack().addSink(proxySink);
-
-        //테스트
-//        ProxySink localProxySink = getProxySink("local", Common.VIDEO);
-//        localProxySink.setTarget(binding.drawingView);
-//        videoTrack.addSink(localProxySink);
-
-
-        // 이후 리스너를 제거하는 것도 고려하세요.
-//        binding.drawingView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
     }
 
     private void initializeCapturer(String type, CustomCapturer screenCapturer){
@@ -946,6 +785,80 @@ public class MeetingRoomActivity extends AppCompatActivity {
         // 카메라 초기화 및 캡처 시작
         VideoCapturer videoCapturer = customCapturer.getVideoCapturer();
         videoCapturer.initialize(surfaceTextureHelper, this, videoSource.getCapturerObserver());
+
+        // 텍스처를 1개 생성합니다.
+        int[] textures = new int[1];
+        GLES20.glGenTextures(1, textures, 0);
+        YuvConverter yuvConverter = new YuvConverter();
+
+        TextureBufferImpl buffer = new TextureBufferImpl(1020, 1305, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
+        long start = System.nanoTime();
+
+        ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
+            @Override
+            public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
+                if(isFaceMode){
+                    Bitmap bitmap = convertVideoFrameToBitmap(frame);
+//                    Bitmap copyBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                    Log.d(TAG, "bitmap:" + bitmap);
+
+                    Canvas canvas = new Canvas(bitmap);
+                    canvas.drawCircle(500, 500, 10, paint);
+
+                    surfaceTextureHelper.getHandler().post(() -> {
+                        // 텍스처를 바인딩합니다.
+                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+                        // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
+                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+
+                        VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
+
+                        long frameTime = System.nanoTime() - start;
+                        VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
+
+                        if(isFaceMode){
+                            capturerObserver.onFrameCaptured(videoFrame);
+                        }
+                    });
+
+//                    faceDetect(bitmap, new FaceListener() {
+//                        @Override
+//                        public void onSuccess(Bitmap bitmap) {
+//                            Log.d(TAG, "bitmap:" + bitmap);
+//
+//                            surfaceTextureHelper.getHandler().post(() -> {
+//                                // 텍스처를 바인딩합니다.
+//                                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+//                                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+//                                // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
+//                                GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+//
+//                                VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
+//
+//                                long frameTime = System.nanoTime() - start;
+//                                VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
+//
+//                                if(isFaceMode){
+//                                    capturerObserver.onFrameCaptured(videoFrame);
+//                                }
+//                            });
+//
+//                        }
+//                    });
+
+//                    try {
+//                        Thread.sleep(100);
+//                    } catch (InterruptedException e) {
+//                        throw new RuntimeException(e);
+//                    }
+
+                    return;
+                }
+                capturerObserver.onFrameCaptured(frame);
+//                Log.d(TAG, "테스트");
+            }
+        });
         videoCapturer.startCapture(VIDEO_RESOLUTION_WIDTH, VIDEO_RESOLUTION_HEIGHT, FPS);
 
         // 오디오 소스 생성
@@ -953,6 +866,83 @@ public class MeetingRoomActivity extends AppCompatActivity {
         customCapturer.setAudioSource(audioSource);
 
         capturerList.add(customCapturer);
+
+    }
+
+    private void faceDetect(Bitmap bitmap, FaceListener faceListener){
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        Log.d(TAG, "image:" + image);
+
+        Task<List<Face>> result =
+                detector.process(image)
+                        .addOnSuccessListener(
+                                new OnSuccessListener<List<Face>>() {
+                                    @Override
+                                    public void onSuccess(List<Face> faces) {
+                                        Log.d(TAG, "faces:" + faces);
+                                        calculateFaceInfo(faces, bitmap, faceListener);
+                                    }
+                                })
+                        .addOnFailureListener(
+                                new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception e) {
+                                        e.printStackTrace();
+                                        Log.e(TAG, "e:" + e.getMessage());
+                                    }
+                                });
+    }
+
+    private GlTextureFrameBuffer bitmapTextureFramebuffer = new GlTextureFrameBuffer(6408);
+    private VideoFrameDrawer frameDrawer = new VideoFrameDrawer();
+    private Matrix drawMatrix = new Matrix();
+
+    public Bitmap convertVideoFrameToBitmap(VideoFrame frame){
+        return peersBinding.mainSurfaceView.eglRenderer.convertVideoFrameToBitmap(frame);
+//        int scaledWidth = (int)(1 * (float)frame.getRotatedWidth());
+//        int scaledHeight = (int)(1 * (float)frame.getRotatedHeight());
+//
+//        GLES20.glBindFramebuffer(36160, this.bitmapTextureFramebuffer.getFrameBufferId());
+//        GLES20.glFramebufferTexture2D(36160, 36064, 3553, this.bitmapTextureFramebuffer.getTextureId(), 0);
+//        GLES20.glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+//        GLES20.glClear(16384);
+//
+//        this.frameDrawer.drawFrame(frame, new GlRectDrawer(), this.drawMatrix, 0, 0, scaledWidth, scaledHeight);
+//
+//        ByteBuffer bitmapBuffer = ByteBuffer.allocateDirect(scaledWidth * scaledHeight * 4);
+//        GLES20.glViewport(0, 0, scaledWidth, scaledHeight);
+//        GLES20.glReadPixels(0, 0, scaledWidth, scaledHeight, 6408, 5121, bitmapBuffer);
+//        GLES20.glBindFramebuffer(36160, 0);
+//
+//        GlUtil.checkNoGLES2Error("EglRenderer.notifyCallbacks");
+//        Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+//        bitmap.copyPixelsFromBuffer(bitmapBuffer);
+    }
+
+    public Bitmap convertVideoFrameToBitmap2(VideoFrame videoFrame) {
+        // VideoFrame에서 YUV 데이터 가져오기
+        VideoFrame.I420Buffer i420Buffer = videoFrame.getBuffer().toI420();
+
+        int width = i420Buffer.getWidth();
+        int height = i420Buffer.getHeight();
+        int ySize = width * height;
+        int uvSize = (width / 2) * (height / 2);
+
+        // YUV 데이터를 RGB로 변환
+        byte[] data = new byte[ySize + (uvSize * 2)];
+        i420Buffer.getDataY().get(data, 0, ySize);
+        i420Buffer.getDataU().get(data, ySize, uvSize);
+        i420Buffer.getDataV().get(data, ySize + uvSize, uvSize);
+
+        // YUV 데이터로부터 Bitmap 생성
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        YuvImage yuvImage = new YuvImage(data, ImageFormat.NV21, width, height, null);
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        yuvImage.compressToJpeg(new Rect(0, 0, width, height), 100, byteArrayOutputStream);
+        byte[] jpegData = byteArrayOutputStream.toByteArray();
+        bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.length);
+
+        return bitmap;
     }
 
     private ProxySink createProxySink(String clientId, String type){
@@ -2417,5 +2407,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     public DrawingView getDrawingView() {
         return drawingView;
+    }
+
+    public interface FaceListener{
+        void onSuccess(Bitmap bitmap);
     }
 }

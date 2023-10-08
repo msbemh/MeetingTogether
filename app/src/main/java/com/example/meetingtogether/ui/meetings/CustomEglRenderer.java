@@ -11,6 +11,7 @@ import androidx.annotation.Nullable;
 
 import org.webrtc.EglBase;
 import org.webrtc.EglRenderer;
+import org.webrtc.GlRectDrawer;
 import org.webrtc.GlTextureFrameBuffer;
 import org.webrtc.GlUtil;
 import org.webrtc.RendererCommon;
@@ -30,6 +31,7 @@ public class CustomEglRenderer extends EglRenderer {
     public CustomVideoFrameDrawer customFrameDrawer;
     public GlTextureFrameBuffer bitmapTextureFramebuffer;
     public RendererCommon.GlDrawer drawer;
+    public RendererCommon.GlDrawer drawer2;
     public Object handlerLock;
     public Handler renderThreadHandler;
 
@@ -59,6 +61,7 @@ public class CustomEglRenderer extends EglRenderer {
                 throw new IllegalStateException(this.name + "Already initialized");
             } else {
                 this.drawer = drawer;
+                this.drawer2 = new GlRectDrawer();
             }
         }
     }
@@ -79,7 +82,9 @@ public class CustomEglRenderer extends EglRenderer {
             GLES20.glFramebufferTexture2D(36160, 36064, 3553, this.bitmapTextureFramebuffer.getTextureId(), 0);
             GLES20.glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
             GLES20.glClear(16384);
-            this.customFrameDrawer.drawFrame(frame, this.drawer, this.drawMatrix, 0, 0, scaledWidth, scaledHeight);
+
+            this.customFrameDrawer.drawFrame(frame, this.drawer2, this.drawMatrix, 0, 0, scaledWidth, scaledHeight);
+
             ByteBuffer bitmapBuffer = ByteBuffer.allocateDirect(scaledWidth * scaledHeight * 4);
             GLES20.glViewport(0, 0, scaledWidth, scaledHeight);
             GLES20.glReadPixels(0, 0, scaledWidth, scaledHeight, 6408, 5121, bitmapBuffer);

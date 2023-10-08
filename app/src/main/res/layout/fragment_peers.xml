@@ -7,8 +7,8 @@
 
     <com.example.meetingtogether.ui.meetings.CustomSurfaceViewRenderer
         android:id="@+id/main_surface_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_width="400dp"
+        android:layout_height="400dp"
         app:layout_constraintBottom_toTopOf="@+id/layout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

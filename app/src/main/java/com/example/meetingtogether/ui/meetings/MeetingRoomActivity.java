@@ -20,6 +20,9 @@ import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.NinePatchDrawable;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.opengl.GLES20;
@@ -34,6 +37,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -198,6 +202,44 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private Boolean isFaceMode = false;
 
     private Paint paint;
+
+    public float left_eye_x = -1;
+    public float left_eye_y = -1;
+    public float right_eye_x = -1;
+    public float right_eye_y = -1;
+    private Bitmap mask1;
+    private int cnt = 0;
+
+    private PeersFragment peersFragment;
+    private WhiteboardFragment whiteboardFragment;
+    private FragmentPeersBinding peersBinding;
+    private FragmentWhiteboardBinding whiteboardBinding;
+    private String roomId;
+
+    /** 마스크1(스파이더맨) 변수 */
+    private float mask1OriginalW = 518;
+    private float mask1OriginalH = 518;
+    private float mask1OriginalD = 160;
+    private float mask1OriginalCX = 259;
+    private float mask1OriginalCY = 259;
+
+    private float mask1Ratio = -1;
+
+    private float mask1AdjustedW = -1;
+    private float mask1AdjustedH = -1;
+    private float mask1AdjustedD = -1;
+    private float mask1AdjustedCX = -1;
+    private float mask1AdjustedCY = -1;
+    private float faceDistance = -1;
+    private float faceCX = -1;
+    private float faceCY = -1;
+
+    private float mask1FaceRatio = -1;
+
+    private float differenceX = -1;
+    private float differenceY = -1;
+
+    private Rect faceRect;
 
     /**
      * 필요한 권한
@@ -399,12 +441,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
     );
 
 
-    private PeersFragment peersFragment;
-    private WhiteboardFragment whiteboardFragment;
-    private FragmentPeersBinding peersBinding;
-    private FragmentWhiteboardBinding whiteboardBinding;
-    private String roomId;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -418,6 +454,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
         paint.setColor(Color.RED);
         paint.setAlpha(0xff);
 
+        mask1 = BitmapFactory.decodeResource(getResources(), R.drawable.mask1);
+
+        /** 실제 이미지 크기(픽셀)과 안드로이드로 불러온 이미지 크기(픽셀)의 차이 비율 계산 */
+        mask1Ratio = mask1.getWidth()/mask1OriginalW;
+
+        mask1AdjustedW = mask1.getWidth();
+        mask1AdjustedH = mask1.getHeight();
+        mask1AdjustedCX = mask1OriginalCX * mask1Ratio;
+        mask1AdjustedCY = mask1OriginalCY * mask1Ratio;
+        mask1AdjustedD = mask1OriginalD * mask1Ratio;
+
+
         /**
          * 프레그 먼트 세팅
          */
@@ -426,17 +474,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
             public void onCreated(FragmentPeersBinding peersBinding) {
                 MeetingRoomActivity.this.peersBinding = peersBinding;
 
-                handler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
-                            @Override
-                            public void onFrame(Bitmap bitmap) {
-                                Log.d(TAG, "bitmap:" + bitmap);
-                            }
-                        }, 1);
-                    }
-                }, 1500);
+//                handler.postDelayed(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
+//                            @Override
+//                            public void onFrame(Bitmap bitmap) {
+//                                Log.d(TAG, "bitmap:" + bitmap);
+//                            }
+//                        }, 1);
+//                    }
+//                }, 1500);
 
             }
 
@@ -575,38 +623,162 @@ public class MeetingRoomActivity extends AppCompatActivity {
         detector = FaceDetection.getClient(highAccuracyOpts);
     }
 
-    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap, FaceListener faceListener){
-        Canvas canvas = new Canvas(bitmap);
+    private int noCnt = 0;
+
+    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap){
+
+        if(faces.size() == 0){
+            noCnt++;
+            if(noCnt >= 7){
+                faceRect = null;
+                faceDistance = -1;
+                noCnt = 0;
+            }
+        }
 
         for (Face face : faces) {
-            Rect bounds = face.getBoundingBox();
+            faceRect = face.getBoundingBox();
             float rotY = face.getHeadEulerAngleY();  // Head is rotated to the right rotY degrees
             float rotZ = face.getHeadEulerAngleZ();  // Head is tilted sideways rotZ degrees
 
             // If landmark detection was enabled (mouth, ears, eyes, cheeks, and
             // nose available):
             FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
-            if (leftEye != null) {
+            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
+
+            if (leftEye != null && rightEye != null) {
                 PointF leftEyePos = leftEye.getPosition();
                 Log.d(TAG, "leftEyePos:" + leftEyePos);
-                canvas.drawCircle(leftEyePos.x, leftEyePos.y, 10, paint);
-            }
+                left_eye_x = leftEyePos.x;
+                left_eye_y = leftEyePos.y;
 
-            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
-            if (rightEye != null) {
                 PointF rightEyePos = rightEye.getPosition();
                 Log.d(TAG, "rightEyePos:" + rightEyePos);
-                canvas.drawCircle(rightEyePos.x, rightEyePos.y, 10, paint);
+                right_eye_x = rightEyePos.x;
+                right_eye_y = rightEyePos.y;
+
+                float minEyeX = -1;
+                float minEyeY = -1;
+                float maxEyeX = -1;
+                float maxEyeY = -1;
+
+                if(left_eye_x > right_eye_x){
+                    minEyeX = right_eye_x;
+                    maxEyeX = left_eye_x;
+                }else if(left_eye_x < right_eye_x){
+                    minEyeX = left_eye_x;
+                    maxEyeX = right_eye_x;
+                }else {
+                    minEyeX = left_eye_x;
+                    maxEyeX = left_eye_x;
+                }
+
+                if(left_eye_y > right_eye_y){
+                    minEyeY = right_eye_y;
+                    maxEyeY = left_eye_y;
+                }else if(left_eye_y < right_eye_y){
+                    minEyeY = left_eye_y;
+                    maxEyeY = right_eye_y;
+                }else {
+                    minEyeY = left_eye_y;
+                    maxEyeY = left_eye_y;
+                }
+
+
+                // 실제 얼굴 눈 사이의 거리
+                faceDistance = calDistance(leftEyePos, rightEyePos);
+                faceCX = minEyeX + (maxEyeX - minEyeX)/2;
+                faceCY = minEyeY + (maxEyeY - minEyeY)/2;
+
+                /**
+                 * 실제 얼굴과 조정된 마스크 사이의 비율
+                 * 비율 = (실제 얼굴의 눈 사이의 거리)/(조정된 마스크의 눈 사이의 거리)
+                 */
+                mask1FaceRatio = faceDistance/mask1AdjustedD;
+
+                /** 실제 얼굴과 안드로이드 마스크 사이의 비율로 크기 조정  */
+                mask1 = resizeBitmap(mask1, mask1FaceRatio);
+
+                mask1AdjustedD = mask1AdjustedD * mask1FaceRatio;
+                mask1AdjustedCX = mask1AdjustedCX * mask1FaceRatio;
+                mask1AdjustedCY = mask1AdjustedCY * mask1FaceRatio;
+                mask1AdjustedW = mask1AdjustedW * mask1FaceRatio;
+                mask1AdjustedH = mask1AdjustedH * mask1FaceRatio;
+
+                /** faceRect 높이 만큼 마스크 높이를 늘린다. */
+                int changeWidth = (int) (faceRect.width() * 1.6);
+                int changeHeight = (int) (faceRect.height() * 1.4);
+                float changeWidthRatio = changeWidth/mask1AdjustedW;
+                float changeHeightRatio = changeHeight/mask1AdjustedH;
+
+                mask1AdjustedW = mask1AdjustedW * changeWidthRatio;
+                mask1AdjustedH = mask1AdjustedH * changeHeightRatio;
+
+                mask1AdjustedCX = mask1AdjustedCX * changeWidthRatio;
+                mask1AdjustedCY = mask1AdjustedCY * changeHeightRatio;
+
+                mask1 = Bitmap.createScaledBitmap(mask1, (int) mask1AdjustedW, (int) mask1AdjustedH, true);
+
+                differenceX = faceCX - mask1AdjustedCX;
+                differenceY = faceCY - mask1AdjustedCY;
             }
+
 
             // If face tracking was enabled:
-            if (face.getTrackingId() != null) {
-                int id = face.getTrackingId();
-            }
+//            if (face.getTrackingId() != null) {
+//                int id = face.getTrackingId();
+//            }
+            break;
         }
 
-        faceListener.onSuccess(bitmap);
+//        faceListener.onSuccess(bitmap);
     }
+
+    // 비트맵 리사이징
+    public Bitmap resizeBitmap(Bitmap bitmap, float ratio) {
+
+        int scaleWidth = (int) (bitmap.getWidth() * ratio);
+        int scaleHeight = (int) (bitmap.getHeight() * ratio);
+
+        Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, scaleWidth, scaleHeight, true);
+
+        return resizedBitmap;
+    }
+
+//    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap){
+//        Canvas canvas = new Canvas(bitmap);
+//
+//        for (Face face : faces) {
+//            Rect bounds = face.getBoundingBox();
+//            float rotY = face.getHeadEulerAngleY();  // Head is rotated to the right rotY degrees
+//            float rotZ = face.getHeadEulerAngleZ();  // Head is tilted sideways rotZ degrees
+//
+//            // If landmark detection was enabled (mouth, ears, eyes, cheeks, and
+//            // nose available):
+//            FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
+//            if (leftEye != null) {
+//                PointF leftEyePos = leftEye.getPosition();
+//                Log.d(TAG, "leftEyePos:" + leftEyePos);
+//                left_eye_x = leftEyePos.x;
+//                left_eye_y = leftEyePos.y;
+////                canvas.drawCircle(leftEyePos.x, leftEyePos.y, 10, paint);
+//            }
+//
+//            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
+//            if (rightEye != null) {
+//                PointF rightEyePos = rightEye.getPosition();
+//                Log.d(TAG, "rightEyePos:" + rightEyePos);
+////                canvas.drawCircle(rightEyePos.x, rightEyePos.y, 10, paint);
+//                right_eye_x = rightEyePos.x;
+//                right_eye_y = rightEyePos.y;
+//            }
+//
+//            // If face tracking was enabled:
+//            if (face.getTrackingId() != null) {
+//                int id = face.getTrackingId();
+//            }
+//        }
+//    }
 
 
     public void replaceFragment(Fragment fragment) {
@@ -764,6 +936,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     }
 
+
+
     private void initializeCapturer(String type, CustomCapturer screenCapturer){
         CustomCapturer customCapturer = null;
         if(Common.VIDEO.equals(type)){
@@ -791,26 +965,57 @@ public class MeetingRoomActivity extends AppCompatActivity {
         GLES20.glGenTextures(1, textures, 0);
         YuvConverter yuvConverter = new YuvConverter();
 
-        TextureBufferImpl buffer = new TextureBufferImpl(1020, 1305, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
+        TextureBufferImpl buffer = new TextureBufferImpl(720, 1280, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
         long start = System.nanoTime();
+
 
         ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
             @Override
             public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
                 if(isFaceMode){
                     Bitmap bitmap = convertVideoFrameToBitmap(frame);
-//                    Bitmap copyBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-                    Log.d(TAG, "bitmap:" + bitmap);
+//                    Log.d(TAG, "bitmap:" + bitmap);
 
                     Canvas canvas = new Canvas(bitmap);
-                    canvas.drawCircle(500, 500, 10, paint);
+
+//                    if(faceRect != null){
+//                        canvas.drawRect(faceRect, paint);
+//                    }
+
+                    // 왼쪽눈 오른쪽 눈에 대한 정보가 있다면 그려주자
+                    if(faceDistance >= 0) {
+                        canvas.drawBitmap(mask1, differenceX,differenceY, new Paint());
+                    }
+
+                    /** 50번 캡처하면 그때 1번 얼굴 인식을 한다. */
+                    cnt++;
+                    if(cnt >= 25){
+                        cnt = 0;
+                        Bitmap copyBitmap = bitmap;
+                        handler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                faceDetect(copyBitmap);
+                            }
+                        });
+
+                    }
+
+
+                    // 좌우 상하 반전
+                    Matrix matrix = new Matrix();
+                    matrix.setScale(1, -1);
+
+                    // 이미지 회전
+                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, false);
+                    Bitmap copyBitmap2 = bitmap;
 
                     surfaceTextureHelper.getHandler().post(() -> {
                         // 텍스처를 바인딩합니다.
                         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
                         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
                         // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
-                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, copyBitmap2, 0);
 
                         VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
 
@@ -822,36 +1027,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         }
                     });
 
-//                    faceDetect(bitmap, new FaceListener() {
-//                        @Override
-//                        public void onSuccess(Bitmap bitmap) {
-//                            Log.d(TAG, "bitmap:" + bitmap);
-//
-//                            surfaceTextureHelper.getHandler().post(() -> {
-//                                // 텍스처를 바인딩합니다.
-//                                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-//                                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-//                                // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
-//                                GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
-//
-//                                VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
-//
-//                                long frameTime = System.nanoTime() - start;
-//                                VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
-//
-//                                if(isFaceMode){
-//                                    capturerObserver.onFrameCaptured(videoFrame);
-//                                }
-//                            });
-//
-//                        }
-//                    });
-
-//                    try {
-//                        Thread.sleep(100);
-//                    } catch (InterruptedException e) {
-//                        throw new RuntimeException(e);
-//                    }
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
 
                     return;
                 }
@@ -869,9 +1049,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     }
 
-    private void faceDetect(Bitmap bitmap, FaceListener faceListener){
+    private void faceDetect(Bitmap bitmap){
         InputImage image = InputImage.fromBitmap(bitmap, 0);
-        Log.d(TAG, "image:" + image);
+//        Log.d(TAG, "image:" + image);
 
         Task<List<Face>> result =
                 detector.process(image)
@@ -879,8 +1059,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 new OnSuccessListener<List<Face>>() {
                                     @Override
                                     public void onSuccess(List<Face> faces) {
-                                        Log.d(TAG, "faces:" + faces);
-                                        calculateFaceInfo(faces, bitmap, faceListener);
+//                                        Log.d(TAG, "faces:" + faces);
+                                        calculateFaceInfo(faces, bitmap);
                                     }
                                 })
                         .addOnFailureListener(
@@ -893,30 +1073,36 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 });
     }
 
+//    private void faceDetect(Bitmap bitmap, FaceListener faceListener){
+//        InputImage image = InputImage.fromBitmap(bitmap, 0);
+//        Log.d(TAG, "image:" + image);
+//
+//        Task<List<Face>> result =
+//                detector.process(image)
+//                        .addOnSuccessListener(
+//                                new OnSuccessListener<List<Face>>() {
+//                                    @Override
+//                                    public void onSuccess(List<Face> faces) {
+//                                        Log.d(TAG, "faces:" + faces);
+//                                        calculateFaceInfo(faces, bitmap, faceListener);
+//                                    }
+//                                })
+//                        .addOnFailureListener(
+//                                new OnFailureListener() {
+//                                    @Override
+//                                    public void onFailure(@NonNull Exception e) {
+//                                        e.printStackTrace();
+//                                        Log.e(TAG, "e:" + e.getMessage());
+//                                    }
+//                                });
+//    }
+
     private GlTextureFrameBuffer bitmapTextureFramebuffer = new GlTextureFrameBuffer(6408);
     private VideoFrameDrawer frameDrawer = new VideoFrameDrawer();
     private Matrix drawMatrix = new Matrix();
 
     public Bitmap convertVideoFrameToBitmap(VideoFrame frame){
         return peersBinding.mainSurfaceView.eglRenderer.convertVideoFrameToBitmap(frame);
-//        int scaledWidth = (int)(1 * (float)frame.getRotatedWidth());
-//        int scaledHeight = (int)(1 * (float)frame.getRotatedHeight());
-//
-//        GLES20.glBindFramebuffer(36160, this.bitmapTextureFramebuffer.getFrameBufferId());
-//        GLES20.glFramebufferTexture2D(36160, 36064, 3553, this.bitmapTextureFramebuffer.getTextureId(), 0);
-//        GLES20.glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
-//        GLES20.glClear(16384);
-//
-//        this.frameDrawer.drawFrame(frame, new GlRectDrawer(), this.drawMatrix, 0, 0, scaledWidth, scaledHeight);
-//
-//        ByteBuffer bitmapBuffer = ByteBuffer.allocateDirect(scaledWidth * scaledHeight * 4);
-//        GLES20.glViewport(0, 0, scaledWidth, scaledHeight);
-//        GLES20.glReadPixels(0, 0, scaledWidth, scaledHeight, 6408, 5121, bitmapBuffer);
-//        GLES20.glBindFramebuffer(36160, 0);
-//
-//        GlUtil.checkNoGLES2Error("EglRenderer.notifyCallbacks");
-//        Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
-//        bitmap.copyPixelsFromBuffer(bitmapBuffer);
     }
 
     public Bitmap convertVideoFrameToBitmap2(VideoFrame videoFrame) {
@@ -2146,7 +2332,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 data.get(bytes);
 
                                 Bitmap bitmap = Common.byteArrayToBitmap(bytes);
-                                Log.d(TAG, "bitmap:" + bitmap);
+//                                Log.d(TAG, "bitmap:" + bitmap);
                                 drawingView.setBitmap(bitmap);
                                 return;
                             }
@@ -2173,7 +2359,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 Log.d(TAG, "img_req 요청을 받았다.");
                                 if(drawingView != null){
                                     Bitmap bitmap = getViewBitmap(drawingView);
-                                    Log.d(TAG, "bitmap:" + bitmap);
+//                                    Log.d(TAG, "bitmap:" + bitmap);
                                     byte[] bitmapData = Common.bitmapToByteArray(bitmap);
                                     Log.d(TAG, "bitmapData:" + bitmapData);
                                     ByteBuffer bitmapByteBuffer = ByteBuffer.wrap(bitmapData);
@@ -2411,5 +2597,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     public interface FaceListener{
         void onSuccess(Bitmap bitmap);
+    }
+
+    public float calDistance(PointF point1, PointF point2){
+        return (float) Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
     }
 }

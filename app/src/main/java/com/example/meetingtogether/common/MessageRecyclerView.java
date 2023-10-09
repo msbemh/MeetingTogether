@@ -13,16 +13,17 @@ import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 
 import java.util.List;
 
-public class CommonRecyclerView {
+public class MessageRecyclerView {
     private List<?> dataList;
     private RecyclerView recyclerView;
     private Context context;
     private MyRecyclerAdapter adapter;
     public OnItemClickInterface onItemClickInterface;
     public OnBind onBind;
-    public int rowItem;
+    public int receiveRowItem;
+    public int sendRowItem;
 
-    public CommonRecyclerView(OnBind onBind){
+    public MessageRecyclerView(OnBind onBind){
         this.onBind = onBind;
     }
 
@@ -56,8 +57,20 @@ public class CommonRecyclerView {
         this.dataList = dataList;
     }
 
-    public void setRowItem(int rowItem){
-        this.rowItem = rowItem;
+    public int getReceiveRowItem() {
+        return receiveRowItem;
+    }
+
+    public void setReceiveRowItem(int receiveRowItem) {
+        this.receiveRowItem = receiveRowItem;
+    }
+
+    public int getSendRowItem() {
+        return sendRowItem;
+    }
+
+    public void setSendRowItem(int sendRowItem) {
+        this.sendRowItem = sendRowItem;
     }
 
     public void setOnItemClickListener(OnItemClickInterface onItemClickInterface) {
@@ -123,7 +136,12 @@ public class CommonRecyclerView {
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View convertView = LayoutInflater.from(parent.getContext()).inflate(rowItem, parent,false);
+            View convertView = null;
+            if(viewType == MessageModel.MessageType.RECEIVE.getValue()){
+                convertView = LayoutInflater.from(parent.getContext()).inflate(receiveRowItem, parent,false);
+            }else if(viewType == MessageModel.MessageType.SEND.getValue()){
+                convertView = LayoutInflater.from(parent.getContext()).inflate(sendRowItem, parent,false);
+            }
             return new ViewHolder(convertView);
         }
 
@@ -137,6 +155,17 @@ public class CommonRecyclerView {
             return dataList.size();
         }
 
+        @Override
+        public int getItemViewType(int position) {
+            MessageModel messageModel = (MessageModel) dataList.get(position);
+            if(messageModel.getMessageType() == MessageModel.MessageType.RECEIVE){
+                return MessageModel.MessageType.RECEIVE.getValue();
+            }else if(messageModel.getMessageType() == MessageModel.MessageType.SEND){
+                return MessageModel.MessageType.SEND.getValue();
+            }
+
+            return -1;
+        }
     }
 
 }

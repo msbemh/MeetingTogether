@@ -1,6 +1,10 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.common.Common.CHAT;
+import static com.example.meetingtogether.common.Common.PEERS;
 import static com.example.meetingtogether.common.Common.ROOMID;
+import static com.example.meetingtogether.common.Common.VIDEO;
+import static com.example.meetingtogether.common.Common.WHITE_BOARD;
 
 import android.Manifest;
 import android.app.Activity;
@@ -114,10 +118,12 @@ import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.ColorType;
 import com.example.meetingtogether.common.Common;
 import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
+import com.example.meetingtogether.databinding.FragmentMeetingRoomChatBinding;
 import com.example.meetingtogether.databinding.FragmentPeersBinding;
 import com.example.meetingtogether.databinding.FragmentWhiteboardBinding;
 import com.example.meetingtogether.services.MeetingService;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
+import com.example.meetingtogether.ui.meetings.fragments.MeetingRoomChatFragment;
 import com.example.meetingtogether.ui.meetings.fragments.PeersFragment;
 import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
 import com.example.meetingtogether.ui.meetings.DTO.UserModel;
@@ -216,6 +222,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private FragmentWhiteboardBinding whiteboardBinding;
     private String roomId;
 
+    private MeetingRoomChatFragment meetingRoomChatFragment;
+    private FragmentMeetingRoomChatBinding meetingRoomChatBinding;
+
     /** 마스크1(스파이더맨) 변수 */
     private float mask1OriginalW = 518;
     private float mask1OriginalH = 518;
@@ -240,6 +249,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private float differenceY = -1;
 
     private Rect faceRect;
+    private String meetingMode = PEERS;
 
     /**
      * 필요한 권한
@@ -494,6 +504,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 Log.e(TAG, e.getMessage());
             }
         });
+
+        /** 화이트 보드 프레그먼트 생성 */
         whiteboardFragment = WhiteboardFragment.newInstance(new WhiteboardFragment.CreateResultInterface() {
             @Override
             public void onCreated(FragmentWhiteboardBinding whiteboardBinding, ColorModel colorModel) {
@@ -508,13 +520,29 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        /** 채팅 프레그먼트 */
+        meetingRoomChatFragment = MeetingRoomChatFragment.newInstance(new MeetingRoomChatFragment.CreateResultInterface() {
+            @Override
+            public void onCreated(FragmentMeetingRoomChatBinding binding) {
+                meetingRoomChatBinding = binding;
+            }
+
+            @Override
+            public void onError(Exception e) {
+                e.printStackTrace();
+                Log.e(TAG, e.getMessage());
+            }
+        });
+
         // 프래그먼트 매니저 가져오기
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction()
                 .add(R.id.mainFrameLayout, peersFragment)
                 .add(R.id.mainFrameLayout, whiteboardFragment)
+                .add(R.id.mainFrameLayout, meetingRoomChatFragment)
                 .show(peersFragment)
                 .hide(whiteboardFragment)
+                .hide(meetingRoomChatFragment)
                 .commit();
 
         HandlerThread handlerThread = new HandlerThread("WebRTCThread");
@@ -586,20 +614,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
-        binding.testButton.setOnClickListener(new View.OnClickListener() {
+        binding.chatButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-//                for (int i = 0; i < peerConnections.size(); i++){
-//                    CustomPeerConnection customPeerConnection = peerConnections.get(i);
-//                    DataChannel dataChannel = customPeerConnection.getDataChannel();
-//
-//                    Bitmap bitmap = getViewBitmap(drawingView);
-//
-//                    byte[] data = Common.bitmapToByteArray(bitmap);
-//
-//                    ByteBuffer buffer = ByteBuffer.wrap(data);
-//                    dataChannel.send(new DataChannel.Buffer(buffer, true));
-//                }
+                if(meetingRoomChatFragment != null) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            replaceFragment(meetingRoomChatFragment);
+                        }
+                    });
+                }
             }
         });
 
@@ -784,18 +809,39 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public void replaceFragment(Fragment fragment) {
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-        if(fragment instanceof WhiteboardFragment){
-            fragmentTransaction
-                    .hide(peersFragment)
-                    .show(fragment)
-                    .commit();
-        }else {
+        
+        if(fragment instanceof PeersFragment){
             fragmentTransaction
                     .hide(whiteboardFragment)
+                    .hide(meetingRoomChatFragment)
                     .show(fragment)
                     .commit();
+            meetingMode = PEERS;
+        }else if(fragment instanceof WhiteboardFragment){
+            fragmentTransaction
+                    .hide(peersFragment)
+                    .hide(meetingRoomChatFragment)
+                    .show(fragment)
+                    .commit();
+            meetingMode = WHITE_BOARD;
+        }else if(fragment instanceof MeetingRoomChatFragment){
+            // 현재 show된 프래그먼트가 채팅일 경우
+            if(CHAT.equals(meetingMode)){
+                fragmentTransaction
+                        .hide(meetingRoomChatFragment)
+                        .hide(whiteboardFragment)
+                        .show(peersFragment)
+                        .commit();
+                meetingMode = PEERS;
+            }else{
+                fragmentTransaction
+                        .hide(whiteboardFragment)
+                        .hide(peersFragment)
+                        .show(fragment)
+                        .commit();
+                meetingMode = CHAT;
+            }
         }
-
     }
 
     private Bitmap getViewBitmap(View view) {
@@ -968,77 +1014,79 @@ public class MeetingRoomActivity extends AppCompatActivity {
         TextureBufferImpl buffer = new TextureBufferImpl(720, 1280, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
         long start = System.nanoTime();
 
-
-        ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
-            @Override
-            public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
-                if(isFaceMode){
-                    Bitmap bitmap = convertVideoFrameToBitmap(frame);
+        if(VIDEO.equals(type)){
+            ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
+                @Override
+                public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
+                    if(isFaceMode){
+                        Bitmap bitmap = convertVideoFrameToBitmap(frame);
 //                    Log.d(TAG, "bitmap:" + bitmap);
 
-                    Canvas canvas = new Canvas(bitmap);
+                        Canvas canvas = new Canvas(bitmap);
 
 //                    if(faceRect != null){
 //                        canvas.drawRect(faceRect, paint);
 //                    }
 
-                    // 왼쪽눈 오른쪽 눈에 대한 정보가 있다면 그려주자
-                    if(faceDistance >= 0) {
-                        canvas.drawBitmap(mask1, differenceX,differenceY, new Paint());
-                    }
+                        // 왼쪽눈 오른쪽 눈에 대한 정보가 있다면 그려주자
+                        if(faceDistance >= 0) {
+                            canvas.drawBitmap(mask1, differenceX,differenceY, new Paint());
+                        }
 
-                    /** 50번 캡처하면 그때 1번 얼굴 인식을 한다. */
-                    cnt++;
-                    if(cnt >= 25){
-                        cnt = 0;
-                        Bitmap copyBitmap = bitmap;
-                        handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                faceDetect(copyBitmap);
+                        /** 50번 캡처하면 그때 1번 얼굴 인식을 한다. */
+                        cnt++;
+                        if(cnt >= 25){
+                            cnt = 0;
+                            Bitmap copyBitmap = bitmap;
+                            handler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    faceDetect(copyBitmap);
+                                }
+                            });
+
+                        }
+
+
+                        // 좌우 상하 반전
+                        Matrix matrix = new Matrix();
+                        matrix.setScale(1, -1);
+
+                        // 이미지 회전
+                        bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, false);
+                        Bitmap copyBitmap2 = bitmap;
+
+                        surfaceTextureHelper.getHandler().post(() -> {
+                            // 텍스처를 바인딩합니다.
+                            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+                            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+                            // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
+                            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, copyBitmap2, 0);
+
+                            VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
+
+                            long frameTime = System.nanoTime() - start;
+                            VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
+
+                            if(isFaceMode){
+                                capturerObserver.onFrameCaptured(videoFrame);
                             }
                         });
 
-                    }
-
-
-                    // 좌우 상하 반전
-                    Matrix matrix = new Matrix();
-                    matrix.setScale(1, -1);
-
-                    // 이미지 회전
-                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, false);
-                    Bitmap copyBitmap2 = bitmap;
-
-                    surfaceTextureHelper.getHandler().post(() -> {
-                        // 텍스처를 바인딩합니다.
-                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
-                        // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
-                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, copyBitmap2, 0);
-
-                        VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
-
-                        long frameTime = System.nanoTime() - start;
-                        VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
-
-                        if(isFaceMode){
-                            capturerObserver.onFrameCaptured(videoFrame);
+                        try {
+                            Thread.sleep(10);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
                         }
-                    });
 
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                        return;
                     }
-
-                    return;
-                }
-                capturerObserver.onFrameCaptured(frame);
+                    capturerObserver.onFrameCaptured(frame);
 //                Log.d(TAG, "테스트");
-            }
-        });
+                }
+            });
+        }
+
         videoCapturer.startCapture(VIDEO_RESOLUTION_WIDTH, VIDEO_RESOLUTION_HEIGHT, FPS);
 
         // 오디오 소스 생성
@@ -2292,6 +2340,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     Log.d(TAG, tagFlag + "onDataChannel: ");
                     Log.d(TAG, "New Data channel " + dc.label());
 
+                    /** 데이터 받을 때 사용하는 데이터 채널 */
                     dc.registerObserver(new DataChannel.Observer() {
                         @Override
                         public void onBufferedAmountChange(long previousAmount) {
@@ -2321,28 +2370,44 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                         }
 
+                        /**
+                         * WebRTC 데이터 채널 데이터 수신
+                         */
                         @Override
                         public void onMessage(final DataChannel.Buffer buffer) {
                             Log.d(TAG, "buffer" + buffer);
+                            /** 데이터가 바이너리 일 때 */
                             if (buffer.binary) {
                                 Log.d(TAG, "Received binary msg over " + dc);
 
+                                /** ByteBuffer 를 byte[] 로 넘기기 */
                                 ByteBuffer data = buffer.data;
                                 final byte[] bytes = new byte[data.capacity()];
                                 data.get(bytes);
 
+                                /** byte[] 로 부터 Bitmap 가져오기 */
                                 Bitmap bitmap = Common.byteArrayToBitmap(bytes);
-//                                Log.d(TAG, "bitmap:" + bitmap);
                                 drawingView.setBitmap(bitmap);
                                 return;
                             }
+
+                            /**
+                             * ByteBuffer => byte[] => String 변환
+                             */
                             ByteBuffer data = buffer.data;
                             final byte[] bytes = new byte[data.capacity()];
                             data.get(bytes);
                             String strData = new String(bytes, Charset.forName("UTF-8"));
 
+                            /** ';' 로 구분하여 데이터 정보 가져오기 */
                             String[] splitData = strData.split(";");
 
+                            /**
+                             * [cmd]
+                             * draw : 화이트보드에서 화면 그릴 때 정보
+                             * img_req : 상대방에게 현재 화이트보드에 그려진 이미지 요청
+                             * chat : 채팅
+                             */
                             String cmd = splitData[0];
 
                             if("draw".equals(cmd)){
@@ -2367,7 +2432,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                     CustomPeerConnection customPeerConnection = getCustomPeerConnection(clientId, Common.VIDEO);
                                     customPeerConnection.getDataChannel().send(new DataChannel.Buffer(bitmapByteBuffer, true));
                                 }
+                            /**
+                             * 데이터 채널에서 채팅으로 통신할 때
+                             */
+                            }else if("chat".equals(cmd)){
+                                String type = splitData[1];
+                                if("txt".equals(type)){
 
+                                }else if("img".equals(type)){
+
+                                }
                             }
                         }
                     });

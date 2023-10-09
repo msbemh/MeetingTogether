@@ -11,6 +11,9 @@ public class Common {
     static public final String WHITE_BOARD = "WhiteBoard";
     static public final String ROOMID = "RoomId";
 
+    static public final String PEERS = "Peers";
+    static public final String CHAT = "Chat";
+
     // Bitmap을 Byte로 변환
     static public byte[] bitmapToByteArray(Bitmap bitmap) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream() ;

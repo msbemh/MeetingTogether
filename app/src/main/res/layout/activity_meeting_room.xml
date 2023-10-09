@@ -196,7 +196,7 @@
             </LinearLayout>
             <!-- 얼굴필터 -->
             <LinearLayout
-                android:id="@+id/testButton"
+                android:id="@+id/chatButton"
                 android:layout_width="100dp"
                 android:layout_height="100dp"
                 android:gravity="center"

@@ -31,7 +31,7 @@ public class MessageRecyclerView {
      * ViewBind 와 onBindViewHolder Interface
      */
     public interface OnBind {
-        void onBindViewListener(MyRecyclerAdapter.ViewHolder viewHolder, View view);
+        void onBindViewListener(MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType);
         void onBindViewHolderListener(MyRecyclerAdapter.ViewHolder holder, int position);
         void onLayout(Context context, RecyclerView recyclerView);
     }
@@ -77,6 +77,14 @@ public class MessageRecyclerView {
         this.onItemClickInterface = onItemClickInterface;
     }
 
+    public RecyclerView getRecyclerView() {
+        return recyclerView;
+    }
+
+    public MyRecyclerAdapter getAdapter() {
+        return adapter;
+    }
+
     public void adapt(){
         // 레이아웃 적용
         onBind.onLayout(context, recyclerView);
@@ -94,14 +102,15 @@ public class MessageRecyclerView {
             this.dataList = dataList;
         }
 
-        public class ViewHolder<T extends ViewBinding> extends RecyclerView.ViewHolder{
+        public class ViewHolder<T extends ViewBinding, F extends ViewBinding> extends RecyclerView.ViewHolder{
 
-            public T binding;
+            public T sendBinding;
+            public F receiveBinding;
 
-            public ViewHolder(@NonNull View itemView) {
+            public ViewHolder(@NonNull View itemView, int viewType) {
                 super(itemView);
 
-                onBind.onBindViewListener(this, itemView);
+                onBind.onBindViewListener(this, itemView, viewType);
 
                 itemView.setOnClickListener(new View.OnClickListener() {
                     @Override
@@ -128,8 +137,11 @@ public class MessageRecyclerView {
                 });
             }
 
-            public void setBinding(T binding) {
-                this.binding = binding;
+            public void setSendBinding(T binding) {
+                this.sendBinding = binding;
+            }
+            public void setReceiveBinding(F binding) {
+                this.receiveBinding = binding;
             }
         }
 
@@ -142,7 +154,7 @@ public class MessageRecyclerView {
             }else if(viewType == MessageModel.MessageType.SEND.getValue()){
                 convertView = LayoutInflater.from(parent.getContext()).inflate(sendRowItem, parent,false);
             }
-            return new ViewHolder(convertView);
+            return new ViewHolder(convertView, viewType);
         }
 
         @Override

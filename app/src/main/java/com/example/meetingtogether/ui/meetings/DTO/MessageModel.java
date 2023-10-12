@@ -20,22 +20,26 @@ public class MessageModel {
         }
     }
 
+
     private MessageType messageType;
     private String msg;
     private List<String> imgPaths;
     private UserModel sender;
     private LocalDate createDate;
+    private String date;
 
-    public MessageModel(MessageType messageType, String msg, UserModel sender) {
+    public MessageModel(MessageType messageType, String msg, UserModel sender, String date) {
         this.messageType = messageType;
         this.msg = msg;
         this.sender = sender;
+        this.date = date;
     }
 
-    public MessageModel(MessageType messageType, List<String> imgPaths, UserModel sender) {
+    public MessageModel(MessageType messageType, List<String> imgPaths, UserModel sender, String date) {
         this.messageType = messageType;
         this.msg = msg;
         this.sender = sender;
+        this.date = date;
     }
 
     public MessageType getMessageType() {
@@ -76,5 +80,13 @@ public class MessageModel {
 
     public void setCreateDate(LocalDate createDate) {
         this.createDate = createDate;
+    }
+
+    public String getDate() {
+        return date;
+    }
+
+    public void setDate(String date) {
+        this.date = date;
     }
 }

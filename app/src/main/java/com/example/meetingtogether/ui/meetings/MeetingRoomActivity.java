@@ -45,10 +45,13 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Message;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
@@ -98,7 +101,10 @@ import java.io.ByteArrayOutputStream;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -117,12 +123,19 @@ import static org.webrtc.SessionDescription.Type.OFFER;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.ColorType;
 import com.example.meetingtogether.common.Common;
+import com.example.meetingtogether.common.CommonRecyclerView;
+import com.example.meetingtogether.common.MessageRecyclerView;
 import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
 import com.example.meetingtogether.databinding.FragmentMeetingRoomChatBinding;
 import com.example.meetingtogether.databinding.FragmentPeersBinding;
 import com.example.meetingtogether.databinding.FragmentWhiteboardBinding;
+import com.example.meetingtogether.databinding.PlainRowItemBinding;
+import com.example.meetingtogether.databinding.ReceiveMessageRowItemBinding;
+import com.example.meetingtogether.databinding.SendMessageRowItemBinding;
 import com.example.meetingtogether.services.MeetingService;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
+import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
+import com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingRoomChatFragment;
 import com.example.meetingtogether.ui.meetings.fragments.PeersFragment;
 import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
@@ -250,6 +263,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     private Rect faceRect;
     private String meetingMode = PEERS;
+    private List<MessageModel> chatList = new ArrayList<>();
+    private MessageRecyclerView messageRecyclerView;
 
     /**
      * 필요한 권한
@@ -525,6 +540,114 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onCreated(FragmentMeetingRoomChatBinding binding) {
                 meetingRoomChatBinding = binding;
+
+                meetingRoomChatBinding.chatSendbutton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        // 메시지 추출
+                        String msg = meetingRoomChatBinding.messageText.getText().toString();
+                        UserModel userModel = getUserModel(socketId);
+
+                        String date = getCurrentLocalDateTime();
+                        // 메시지 추가
+                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, msg, userModel, date));
+
+                        // 리사이클러뷰 인지시키기
+                        int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
+
+                        // 에디터 초기화
+                        meetingRoomChatBinding.messageText.setText("");
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                // 리사이클러뷰 새롭게 인지
+                                messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
+                                // 스크롤 제일 아래로
+                                messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                            }
+                        });
+
+                        // 연결된 피어 모두애게 그리기 정보를 보낸다.
+                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++){
+                            CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+                            DataChannel dataChannel = customPeerConnection.getDataChannel();
+                            String cmd = "chat";
+                            String type = "txt";
+                            String data = cmd + ";" + type + ";" + msg + ";" + date;
+                            ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
+                            dataChannel.send(new DataChannel.Buffer(buffer, false));
+                        }
+                    }
+                });
+
+                // 리사이클러뷰
+                RecyclerView meetingRoomChatRecyclerView = meetingRoomChatBinding.meetingRoomChatRecyclerView;
+
+                // 리사이클러뷰 바인드
+                messageRecyclerView = new MessageRecyclerView(new MessageRecyclerView.OnBind() {
+                    // TODO: ViewBind 변경
+                    // ViewBind 연동
+                    @Override
+                    public void onBindViewListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType) {
+                        Log.d(TAG, "viewHolder:" + viewHolder);
+                        Log.d(TAG, "view:" + view);
+                        if(viewType == MessageModel.MessageType.RECEIVE.getValue()){
+                            viewHolder.setReceiveBinding(ReceiveMessageRowItemBinding.bind(view));
+                        }else{
+                            viewHolder.setSendBinding(SendMessageRowItemBinding.bind(view));
+                        }
+                    }
+                    // TODO: ViewBind 변경
+                    // 실제 View 와 데이터 연동
+                    @Override
+                    public void onBindViewHolderListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
+                        MessageModel messageModel = chatList.get(position);
+
+                        if(chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()){
+                            ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding)(holder.receiveBinding);
+                            binding.msgContent.setText(messageModel.getMsg());
+                            binding.name.setText(messageModel.getSender().getClientId());
+                            binding.receiveDate.setText(messageModel.getDate());
+                        }else{
+                            SendMessageRowItemBinding binding = (SendMessageRowItemBinding)(holder.sendBinding);
+                            binding.msgContent.setText(messageModel.getMsg());
+                            binding.sendDate.setText(messageModel.getDate());
+                        }
+                    }
+                    // TODO: 레이아웃 변경
+                    // 레이아웃 설정
+                    @Override
+                    public void onLayout(Context context, RecyclerView recyclerView) {
+                        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
+                        linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+                        recyclerView.setLayoutManager(linearLayoutManager);
+                    }
+                });
+
+                // TODO: 클릭 이벤트 변경
+                // 리사이클러뷰 클릭 이벤트
+                messageRecyclerView.setOnItemClickListener(new MessageRecyclerView.OnItemClickInterface() {
+                    @Override
+                    public void onItemClickListener(View view, int position) {
+                    }
+                    @Override
+                    public void onItemLongClickListener(View view, int position) {
+                    }
+                });
+
+                messageRecyclerView.setContext(MeetingRoomActivity.this);
+                // TODO: 데이터 변경
+                // 데이터 세팅
+                messageRecyclerView.setDataList(chatList);
+                messageRecyclerView.setRecyclerView(meetingRoomChatRecyclerView);
+                // TODO: row item 레이아웃 변경
+                // row item 레이아웃 세팅
+                messageRecyclerView.setReceiveRowItem(R.layout.receive_message_row_item);
+                messageRecyclerView.setSendRowItem(R.layout.send_message_row_item);
+                // 적용
+                messageRecyclerView.adapt();
+
             }
 
             @Override
@@ -649,6 +772,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     private int noCnt = 0;
+
+    private String getCurrentLocalDateTime(){
+        // 현재 날짜/시간
+        LocalDateTime now = LocalDateTime.now();
+
+        // 포맷팅
+        String formatedNow = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+        return formatedNow;
+    }
 
     private void calculateFaceInfo(List<Face> faces, Bitmap bitmap){
 
@@ -2434,11 +2567,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 }
                             /**
                              * 데이터 채널에서 채팅으로 통신할 때
+                             * cmd;type;msg
                              */
                             }else if("chat".equals(cmd)){
                                 String type = splitData[1];
-                                if("txt".equals(type)){
+                                String msg = splitData[2];
+                                String date = splitData[3];
 
+                                if("txt".equals(type)){
+                                    UserModel userModel = getUserModel(clientId);
+
+                                    MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, msg, userModel, date);
+                                    // 메시지 추가
+                                    chatList.add(messageModel);
+                                    // 리사이클러뷰 인지시키기
+                                    int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
+
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            // 리사이클러뷰 새롭게 인지
+                                            messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
+                                            // 스크롤 제일 아래로
+                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                        }
+                                    });
                                 }else if("img".equals(type)){
 
                                 }

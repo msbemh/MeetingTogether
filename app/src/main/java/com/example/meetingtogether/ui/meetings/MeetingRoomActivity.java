@@ -27,6 +27,7 @@ import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.NinePatchDrawable;
+import android.graphics.drawable.VectorDrawable;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.opengl.GLES20;
@@ -41,12 +42,15 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -227,6 +231,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public float right_eye_x = -1;
     public float right_eye_y = -1;
     private Bitmap mask1;
+//    private VectorDrawable mask2;
     private int cnt = 0;
 
     private PeersFragment peersFragment;
@@ -480,6 +485,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         paint.setAlpha(0xff);
 
         mask1 = BitmapFactory.decodeResource(getResources(), R.drawable.mask1);
+//        mask2 = (VectorDrawable) ResourcesCompat.getDrawable(getResources(), R.drawable.test, null);
 
         /** 실제 이미지 크기(픽셀)과 안드로이드로 불러온 이미지 크기(픽셀)의 차이 비율 계산 */
         mask1Ratio = mask1.getWidth()/mask1OriginalW;
@@ -852,10 +858,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                  * 실제 얼굴과 조정된 마스크 사이의 비율
                  * 비율 = (실제 얼굴의 눈 사이의 거리)/(조정된 마스크의 눈 사이의 거리)
                  */
+                mask1AdjustedD = mask1OriginalD * mask1Ratio;
                 mask1FaceRatio = faceDistance/mask1AdjustedD;
 
                 /** 실제 얼굴과 안드로이드 마스크 사이의 비율로 크기 조정  */
-                mask1 = resizeBitmap(mask1, mask1FaceRatio);
+                mask1 = resizeBitmap(BitmapFactory.decodeResource(getResources(), R.drawable.mask1), mask1FaceRatio);
 
                 mask1AdjustedD = mask1AdjustedD * mask1FaceRatio;
                 mask1AdjustedCX = mask1AdjustedCX * mask1FaceRatio;
@@ -879,6 +886,15 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                 differenceX = faceCX - mask1AdjustedCX;
                 differenceY = faceCY - mask1AdjustedCY;
+
+                /**
+                 * 백터 이미지 크기 조정을 위한 곳
+                 */
+//                int left = (int) (faceRect.left - 100);
+//                int top = (int) (faceRect.top - 100);
+//                int right = (int) (faceRect.right + 100);
+//                int bottom = (int) (faceRect.bottom + 100);
+//                mask2.setBounds(left, top, right, bottom);
             }
 
 
@@ -895,49 +911,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
     // 비트맵 리사이징
     public Bitmap resizeBitmap(Bitmap bitmap, float ratio) {
 
-        int scaleWidth = (int) (bitmap.getWidth() * ratio);
-        int scaleHeight = (int) (bitmap.getHeight() * ratio);
+        int scaleWidth = (int) (bitmap.getWidth() * ratio); //(int) (bitmap.getWidth() * ratio);
+        int scaleHeight = (int) (bitmap.getHeight() * ratio); // (int) (bitmap.getHeight() * ratio);
 
         Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, scaleWidth, scaleHeight, true);
 
         return resizedBitmap;
     }
-
-//    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap){
-//        Canvas canvas = new Canvas(bitmap);
-//
-//        for (Face face : faces) {
-//            Rect bounds = face.getBoundingBox();
-//            float rotY = face.getHeadEulerAngleY();  // Head is rotated to the right rotY degrees
-//            float rotZ = face.getHeadEulerAngleZ();  // Head is tilted sideways rotZ degrees
-//
-//            // If landmark detection was enabled (mouth, ears, eyes, cheeks, and
-//            // nose available):
-//            FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
-//            if (leftEye != null) {
-//                PointF leftEyePos = leftEye.getPosition();
-//                Log.d(TAG, "leftEyePos:" + leftEyePos);
-//                left_eye_x = leftEyePos.x;
-//                left_eye_y = leftEyePos.y;
-////                canvas.drawCircle(leftEyePos.x, leftEyePos.y, 10, paint);
-//            }
-//
-//            FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
-//            if (rightEye != null) {
-//                PointF rightEyePos = rightEye.getPosition();
-//                Log.d(TAG, "rightEyePos:" + rightEyePos);
-////                canvas.drawCircle(rightEyePos.x, rightEyePos.y, 10, paint);
-//                right_eye_x = rightEyePos.x;
-//                right_eye_y = rightEyePos.y;
-//            }
-//
-//            // If face tracking was enabled:
-//            if (face.getTrackingId() != null) {
-//                int id = face.getTrackingId();
-//            }
-//        }
-//    }
-
 
     public void replaceFragment(Fragment fragment) {
         FragmentManager fragmentManager = getSupportFragmentManager();
@@ -1021,9 +1001,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
         peerConnections.add(customPeerConnection);
         Log.d(TAG, "customPeerConnection:" + customPeerConnection);
 
-        // 화이트보드 view 피어와 싱크 맞추기
-//        if(drawingView != null) drawingView.syncPeer();
-
         return customPeerConnection;
     }
 
@@ -1096,26 +1073,36 @@ public class MeetingRoomActivity extends AppCompatActivity {
         initializeSdpMediaCon();
 
         // 메인 SurfaceView를 초기화 한다
-        initializeMainSurfaceViews();
+        initializeMainSurfaceViews(new CreateSurfaceViewRendererResult() {
+            @Override
+            public void onSuccess() {
+                // 피어 팩토리 초기화
+                initializePeerConnectionFactory();
 
-        // 피어 팩토리 초기화
-        initializePeerConnectionFactory();
+                // 캡처러 초기화
+                initializeCapturer(Common.VIDEO, null);
 
-        // 캡처러 초기화
-        initializeCapturer(Common.VIDEO, null);
+                // 트랙 생성
+                CustomTrack customTrack = createTrack(Common.VIDEO);
 
-        // 트랙 생성
-        CustomTrack customTrack = createTrack(Common.VIDEO);
+                // 프록시 싱크 생성
+                createProxySink("local", Common.VIDEO);
 
-        // 프록시 싱크 생성
-        createProxySink("local", Common.VIDEO);
+                // 트랙과 view 연동
+                bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
+            }
 
-        // 트랙과 view 연동
-        bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
-
+            @Override
+            public void onError() {
+                Log.e(TAG, "onError");
+            }
+        });
     }
 
-
+    public static int ConvertDPtoPX(Context context, int dp) {
+        float density = context.getResources().getDisplayMetrics().density;
+        return Math.round((float) dp * density);
+    }
 
     private void initializeCapturer(String type, CustomCapturer screenCapturer){
         CustomCapturer customCapturer = null;
@@ -1144,27 +1131,38 @@ public class MeetingRoomActivity extends AppCompatActivity {
         GLES20.glGenTextures(1, textures, 0);
         YuvConverter yuvConverter = new YuvConverter();
 
-        TextureBufferImpl buffer = new TextureBufferImpl(720, 1280, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
-
+        long start = System.nanoTime();
+//        int width = ConvertDPtoPX(this, peersBinding.mainSurfaceView.getWidth());
+//        int height = ConvertDPtoPX(this, peersBinding.mainSurfaceView.getHeight());
+        TextureBufferImpl buffer = new TextureBufferImpl(VIDEO_RESOLUTION_HEIGHT, VIDEO_RESOLUTION_WIDTH, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
 
         if(VIDEO.equals(type)){
             ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
                 @Override
                 public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
                     if(isFaceMode){
-                        long start = System.nanoTime();
                         Bitmap bitmap = convertVideoFrameToBitmap(frame);
 //                    Log.d(TAG, "bitmap:" + bitmap);
 
                         Canvas canvas = new Canvas(bitmap);
 
-//                    if(faceRect != null){
-//                        canvas.drawRect(faceRect, paint);
-//                    }
+
+
+//                        Canvas canvas = new Canvas(bitmap);
+//                        mask2.setBounds(0, 0, 200, 200);
+//                        // x축과 y축으로 각각 0 픽셀씩 이동
+//                        canvas.translate(0, 0);
+//                        mask2.draw(canvas);
+
+
+                        if(faceRect != null){
+//                            canvas.drawRect(faceRect, paint);
+                        }
 
                         // 왼쪽눈 오른쪽 눈에 대한 정보가 있다면 그려주자
                         if(faceDistance >= 0) {
-                            canvas.drawBitmap(mask1, differenceX,differenceY, new Paint());
+//                            mask2.draw(canvas);
+                            canvas.drawBitmap(mask1, differenceX,differenceY, null);
                         }
 
                         /** 50번 캡처하면 그때 1번 얼굴 인식을 한다. */
@@ -1180,7 +1178,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             });
 
                         }
-
 
                         // 좌우 상하 반전
                         Matrix matrix = new Matrix();
@@ -1206,6 +1203,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 capturerObserver.onFrameCaptured(videoFrame);
                             }
                             videoFrame.release();
+
                         });
 
                         try {
@@ -1255,30 +1253,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                     }
                                 });
     }
-
-//    private void faceDetect(Bitmap bitmap, FaceListener faceListener){
-//        InputImage image = InputImage.fromBitmap(bitmap, 0);
-//        Log.d(TAG, "image:" + image);
-//
-//        Task<List<Face>> result =
-//                detector.process(image)
-//                        .addOnSuccessListener(
-//                                new OnSuccessListener<List<Face>>() {
-//                                    @Override
-//                                    public void onSuccess(List<Face> faces) {
-//                                        Log.d(TAG, "faces:" + faces);
-//                                        calculateFaceInfo(faces, bitmap, faceListener);
-//                                    }
-//                                })
-//                        .addOnFailureListener(
-//                                new OnFailureListener() {
-//                                    @Override
-//                                    public void onFailure(@NonNull Exception e) {
-//                                        e.printStackTrace();
-//                                        Log.e(TAG, "e:" + e.getMessage());
-//                                    }
-//                                });
-//    }
 
     private GlTextureFrameBuffer bitmapTextureFramebuffer = new GlTextureFrameBuffer(6408);
     private VideoFrameDrawer frameDrawer = new VideoFrameDrawer();
@@ -1897,9 +1871,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 peerConnections.remove(i);
                 String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
                 Log.d(TAG, tagFlag + "peerConnections 에서 제거");
-
-                // 화이트보드 view 피어와 싱크 맞추기
-//                if(drawingView != null) drawingView.syncPeer();
             }
         }
     }
@@ -2090,8 +2061,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                  * [레이아웃 파라미터 생성]
                  * SurfaceView의 길이, 높이 설정
                  */
-                final int width = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100, getResources().getDisplayMetrics());
-                final int height = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100, getResources().getDisplayMetrics());
+                final int height = (int) peersBinding.layout.getHeight();
+                final int width = (int) height;
+
                 LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
                 surfaceViewRenderer.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
 
@@ -2288,23 +2260,44 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }, sdpMediaConstraints);
     }
 
-//    private PeerConnection getPeerConnection(String clientId) {
-//        return peerConnections.get(clientId).getPeerConnection();
-//    }
-
     private void sendMessage(Object message) {
         socket.emit("message", message);
     }
 
-    private void initializeMainSurfaceViews() {
+    private void initializeMainSurfaceViews(CreateSurfaceViewRendererResult createSurfaceViewRendererResult) {
         rootEglBase = EglBase.create();
         peersBinding.mainSurfaceView.init(rootEglBase.getEglBaseContext(), null);
         peersBinding.mainSurfaceView.setEnableHardwareScaler(true);
         peersBinding.mainSurfaceView.setMirror(false);
 
-//        binding.drawingView.init(rootEglBase.getEglBaseContext(), null);
-//        binding.drawingView.setEnableHardwareScaler(true);
-//        binding.drawingView.setMirror(true);
+        int width = peersBinding.mainSurfaceView.getWidth();
+        Log.d(TAG, "width:"+width);
+        peersBinding.mainSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "surfaceCreated:");
+                final int width = (int) peersBinding.mainSurfaceView.getWidth();
+                final int height = (int) width;
+
+                ConstraintLayout.LayoutParams layoutParams = new ConstraintLayout.LayoutParams(width, height);
+                layoutParams.bottomToTop = R.id.layout;
+                layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
+                peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
+
+                createSurfaceViewRendererResult.onSuccess();
+            }
+
+            @Override
+            public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+                Log.d(TAG, "surfaceChanged:");
+            }
+
+            @Override
+            public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "surfaceDestroyed:");
+            }
+        });
+
     }
 
     private void initializePeerConnectionFactory() {
@@ -2345,8 +2338,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
         fieldTrials += DISABLE_WEBRTC_AGC_FIELDTRIAL;
         return fieldTrials;
     }
-
-
 
 
     private void startStreamingVideo(CustomPeerConnection customPeerConnection) {

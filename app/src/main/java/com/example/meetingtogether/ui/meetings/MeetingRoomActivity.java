@@ -1145,13 +1145,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
         YuvConverter yuvConverter = new YuvConverter();
 
         TextureBufferImpl buffer = new TextureBufferImpl(720, 1280, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
-        long start = System.nanoTime();
+
 
         if(VIDEO.equals(type)){
             ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
                 @Override
                 public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
                     if(isFaceMode){
+                        long start = System.nanoTime();
                         Bitmap bitmap = convertVideoFrameToBitmap(frame);
 //                    Log.d(TAG, "bitmap:" + bitmap);
 
@@ -1204,6 +1205,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             if(isFaceMode){
                                 capturerObserver.onFrameCaptured(videoFrame);
                             }
+                            videoFrame.release();
                         });
 
                         try {

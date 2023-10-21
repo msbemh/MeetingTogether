@@ -9,6 +9,7 @@ import static com.example.meetingtogether.common.Common.WHITE_BOARD;
 import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -40,6 +41,7 @@ import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
@@ -56,6 +58,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
@@ -102,6 +105,10 @@ import org.webrtc.audio.AudioDeviceModule;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -118,12 +125,25 @@ import java.util.TimerTask;
 
 import io.socket.client.IO;
 import io.socket.client.Socket;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 import static io.socket.client.Socket.EVENT_CONNECT;
 import static io.socket.client.Socket.EVENT_DISCONNECT;
 import static org.webrtc.SessionDescription.Type.ANSWER;
 import static org.webrtc.SessionDescription.Type.OFFER;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.ColorType;
 import com.example.meetingtogether.common.Common;
@@ -136,6 +156,9 @@ import com.example.meetingtogether.databinding.FragmentWhiteboardBinding;
 import com.example.meetingtogether.databinding.PlainRowItemBinding;
 import com.example.meetingtogether.databinding.ReceiveMessageRowItemBinding;
 import com.example.meetingtogether.databinding.SendMessageRowItemBinding;
+import com.example.meetingtogether.retrofit.FileInfo;
+import com.example.meetingtogether.retrofit.RetrofitInterface;
+import com.example.meetingtogether.retrofit.RetrofitResponse;
 import com.example.meetingtogether.services.MeetingService;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
@@ -149,6 +172,8 @@ import com.example.meetingtogether.ui.meetings.google.CameraCaptureInterface;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
 import com.google.mlkit.vision.face.FaceContour;
@@ -271,6 +296,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private List<MessageModel> chatList = new ArrayList<>();
     private MessageRecyclerView messageRecyclerView;
 
+    private Retrofit retrofit;
+    private RetrofitInterface service;
+
     /**
      * 필요한 권한
      */
@@ -313,6 +341,104 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 // 모든 권한에 동의 하지 않음
             }else{
                 showPermissionDialog();
+            }
+        }
+    });
+
+    /**
+     * 앨범에서 이미지를 선택 했을 경우
+     * Intent Callback
+     */
+    private ActivityResultLauncher activityAlbumResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+        @Override
+        public void onActivityResult(ActivityResult result) {
+            try {
+                if(result.getResultCode() == RESULT_OK){
+                    Intent data = result.getData();
+
+                    ClipData clipData = data.getClipData();
+                    Log.d(TAG, String.valueOf(clipData.getItemCount()));
+
+                    // 선택한 이미지가 11장 이상인 경우
+                    if(clipData.getItemCount() > 10){
+                        Toast.makeText(getApplicationContext(), "사진은 10장까지 선택 가능합니다.", Toast.LENGTH_LONG).show();
+                    // 선택한 이미지가 1장 이상 10장 이하인 경우
+                    }else {
+                        Log.d(TAG, "multiple choice");
+
+                        ArrayList<MultipartBody.Part> files = new ArrayList<>();
+                        for (int i = 0; i < clipData.getItemCount(); i++) {
+                            Uri imageUri = clipData.getItemAt(i).getUri();  // 선택한 이미지들의 uri를 가져온다.
+                            try {
+                                Bitmap bitmap = MediaStore.Images.Media.getBitmap(MeetingRoomActivity.this.getContentResolver(), imageUri);
+                                Log.d(TAG, "bitmap:" + bitmap);
+                                File file = saveBitmapToPng(bitmap, MeetingRoomActivity.this);
+
+                                // MultipartBody.Part로 파일 생성
+                                RequestBody requestBody = RequestBody.create(MediaType.parse("multipart/form-data"), file);
+                                MultipartBody.Part part = MultipartBody.Part.createFormData("photos", file.getName(), requestBody);
+                                files.add(part);
+                            } catch (Exception e) {
+                                Log.e(TAG, "File select error", e);
+                            }
+                        }
+
+                        Call<RetrofitResponse> call = service.postImages(files);
+                        call.enqueue(new Callback<RetrofitResponse>() {
+                            @Override
+                            public void onResponse(Call<RetrofitResponse> call, Response<RetrofitResponse> response) {
+                                // 응답 처리
+                                if (response.isSuccessful()) {
+                                    RetrofitResponse retrofitResponse = response.body();
+                                    List<FileInfo> fileInfoList = retrofitResponse.getFileInfo();
+                                    for (FileInfo fileInfo : fileInfoList) {
+                                        UserModel userModel = getUserModel(socketId);
+                                        String date = getCurrentLocalDateTime();
+                                        String filename = fileInfo.getFieldname();
+                                        // 메시지 추가
+                                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, null, filename, userModel, date));
+
+                                        // 연결된 피어 모두애게 그리기 정보를 보낸다.
+                                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++){
+                                            CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+                                            DataChannel dataChannel = customPeerConnection.getDataChannel();
+                                            String cmd = "chat";
+                                            String type = "img";
+                                            String data = cmd + ";" + type + ";" + fileInfo.getFieldname() + ";" + date;
+                                            ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
+                                            dataChannel.send(new DataChannel.Buffer(buffer, false));
+                                        }
+                                    }
+
+                                    // 성공하면, 자신에게 send Message를 표시해준다.
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            // 리사이클러뷰 새롭게 인지
+                                            meetingRoomChatBinding.meetingRoomChatRecyclerView.getAdapter().notifyDataSetChanged();
+
+                                            // 스크롤 제일 아래로
+                                            // messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                        }
+                                    });
+
+                                }
+                                Log.d(TAG, response.message());
+                            }
+
+                            @Override
+                            public void onFailure(Call<RetrofitResponse> call, Throwable t) {
+                                // 오류 처리
+                                Log.d(TAG, t.getMessage());
+                            }
+                        });
+                    }
+                // 취소
+                }else {
+                    Toast.makeText(MeetingRoomActivity.this, "취소 됐습니다.", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
             }
         }
     });
@@ -547,6 +673,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             public void onCreated(FragmentMeetingRoomChatBinding binding) {
                 meetingRoomChatBinding = binding;
 
+                // 메시지 보내기
                 meetingRoomChatBinding.chatSendbutton.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
@@ -556,7 +683,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                         String date = getCurrentLocalDateTime();
                         // 메시지 추가
-                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, msg, userModel, date));
+                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, msg, null, userModel, date));
 
                         // 리사이클러뷰 인지시키기
                         int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
@@ -587,6 +714,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     }
                 });
 
+                // 이미지 보내기
+                meetingRoomChatBinding.imageAddButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        Intent intent = new Intent(Intent.ACTION_PICK);
+                        intent.setType(MediaStore.Images.Media.CONTENT_TYPE);
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);  // 1개 이미지를 가져올 수 있도록 세팅
+                        intent.setData(MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                        activityAlbumResultLauncher.launch(intent);
+                    }
+                });
+
                 // 리사이클러뷰
                 RecyclerView meetingRoomChatRecyclerView = meetingRoomChatBinding.meetingRoomChatRecyclerView;
 
@@ -609,15 +748,82 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     @Override
                     public void onBindViewHolderListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
                         MessageModel messageModel = chatList.get(position);
-
+                        // 받은 메시지
                         if(chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()){
                             ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding)(holder.receiveBinding);
-                            binding.msgContent.setText(messageModel.getMsg());
+                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
+                            String filename = messageModel.getFilename();
+                            if(filename != null){
+                                binding.msgContent.setVisibility(View.GONE);
+                                binding.msgImage.setVisibility(View.VISIBLE);
+
+                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
+                                Glide
+                                    .with(MeetingRoomActivity.this)
+                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                    .listener(new RequestListener<Drawable>() {
+                                        @Override
+                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                            // 이미지 로딩에 실패했을 때 수행할 작업
+                                            return false;
+                                        }
+
+                                        @Override
+                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                            // 이미지 로딩이 완료되었을 때 수행할 작업
+                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                            return false;
+                                        }
+                                    })
+                                    .into(binding.msgImage);
+                            }else{
+                                binding.msgContent.setVisibility(View.VISIBLE);
+                                binding.msgImage.setVisibility(View.GONE);
+
+                                binding.msgContent.setText(messageModel.getMsg());
+                            }
+
                             binding.name.setText(messageModel.getSender().getClientId());
                             binding.receiveDate.setText(messageModel.getDate());
+                        // 보낸 메시지
                         }else{
                             SendMessageRowItemBinding binding = (SendMessageRowItemBinding)(holder.sendBinding);
-                            binding.msgContent.setText(messageModel.getMsg());
+
+                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
+                            String filename = messageModel.getFilename();
+                            if(filename != null){
+                                binding.msgContent.setVisibility(View.GONE);
+                                binding.msgImage.setVisibility(View.VISIBLE);
+
+                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
+                                // 여기선 메시지 1개당 이미지 1개이기 때문에 항상 0 인덱스이다.
+                                Glide
+                                    .with(MeetingRoomActivity.this)
+                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                    .listener(new RequestListener<Drawable>() {
+                                        @Override
+                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                            // 이미지 로딩에 실패했을 때 수행할 작업
+                                            return false;
+                                        }
+
+                                        @Override
+                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                            // 이미지 로딩이 완료되었을 때 수행할 작업
+                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                            return false;
+                                        }
+                                    })
+                                    .into(binding.msgImage);
+                            }else{
+                                binding.msgContent.setVisibility(View.VISIBLE);
+                                binding.msgImage.setVisibility(View.GONE);
+
+                                binding.msgContent.setText(messageModel.getMsg());
+                            }
+
                             binding.sendDate.setText(messageModel.getDate());
                         }
                     }
@@ -775,6 +981,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         .build();
 
         detector = FaceDetection.getClient(highAccuracyOpts);
+
+        /**
+         * Retrofit
+         */
+        Gson gson = new GsonBuilder().setLenient().create();
+        retrofit = new Retrofit.Builder()
+                .baseUrl("https://webrtc-sfu.kro.kr:3030")
+                .addConverterFactory(GsonConverterFactory.create(gson))
+                .build();
+        service = retrofit.create(RetrofitInterface.class);
     }
 
     private int noCnt = 0;
@@ -2566,11 +2782,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 String type = splitData[1];
                                 String msg = splitData[2];
                                 String date = splitData[3];
+                                UserModel userModel = getUserModel(clientId);
 
                                 if("txt".equals(type)){
-                                    UserModel userModel = getUserModel(clientId);
 
-                                    MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, msg, userModel, date);
+                                    MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, msg, null, userModel, date);
                                     // 메시지 추가
                                     chatList.add(messageModel);
                                     // 리사이클러뷰 인지시키기
@@ -2586,7 +2802,22 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                         }
                                     });
                                 }else if("img".equals(type)){
+                                    String imagePath = msg;
+                                    MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, null, imagePath, userModel, date);
+                                    // 메시지 추가
+                                    chatList.add(messageModel);
+                                    // 리사이클러뷰 인지시키기
+                                    int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
 
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            // 리사이클러뷰 새롭게 인지
+                                            messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
+                                            // 스크롤 제일 아래로
+//                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                        }
+                                    });
                                 }
                             }
                         }
@@ -2821,5 +3052,42 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     public float calDistance(PointF point1, PointF point2){
         return (float) Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+    }
+
+    // 비트맵을 파일로 변환하는 메소드
+    public File saveBitmapToPng(Bitmap bitmap, Context context) {
+
+        //내부저장소 캐시 경로를 받아옵니다.
+        File storage = context.getCacheDir();
+
+        //저장할 파일 이름
+        String fileName = String.valueOf(System.currentTimeMillis()) + ".png";
+
+        //storage 에 파일 인스턴스를 생성합니다.
+        File imgFile = new File(storage, fileName);
+
+        try {
+
+            // 자동으로 빈 파일을 생성합니다.
+            imgFile.createNewFile();
+
+            // 파일을 쓸 수 있는 스트림을 준비합니다.
+            FileOutputStream out = new FileOutputStream(imgFile);
+
+            // compress 함수를 사용해 스트림에 비트맵을 저장합니다.
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+
+            // 스트림 사용후 닫아줍니다.
+            out.close();
+
+            return imgFile;
+
+        } catch (FileNotFoundException e) {
+            Log.e("MyTag","FileNotFoundException : " + e.getMessage());
+        } catch (IOException e) {
+            Log.e("MyTag","IOException : " + e.getMessage());
+        }
+
+        return imgFile;
     }
 }

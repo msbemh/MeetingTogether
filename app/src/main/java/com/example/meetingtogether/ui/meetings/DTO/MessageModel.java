@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings.DTO;
 
+import com.example.meetingtogether.retrofit.FileInfo;
+
 import java.time.LocalDate;
 import java.util.List;
 
@@ -23,23 +25,17 @@ public class MessageModel {
 
     private MessageType messageType;
     private String msg;
-    private List<String> imgPaths;
+    private String filename;
     private UserModel sender;
     private LocalDate createDate;
     private String date;
 
-    public MessageModel(MessageType messageType, String msg, UserModel sender, String date) {
+    public MessageModel(MessageType messageType, String msg, String filename, UserModel sender, String date) {
         this.messageType = messageType;
         this.msg = msg;
         this.sender = sender;
         this.date = date;
-    }
-
-    public MessageModel(MessageType messageType, List<String> imgPaths, UserModel sender, String date) {
-        this.messageType = messageType;
-        this.msg = msg;
-        this.sender = sender;
-        this.date = date;
+        this.filename = filename;
     }
 
     public MessageType getMessageType() {
@@ -58,16 +54,16 @@ public class MessageModel {
         this.msg = msg;
     }
 
-    public List<String> getImgPaths() {
-        return imgPaths;
-    }
-
-    public void setImgPaths(List<String> imgPaths) {
-        this.imgPaths = imgPaths;
-    }
-
     public UserModel getSender() {
         return sender;
+    }
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public void setFilename(String filename) {
+        this.filename = filename;
     }
 
     public void setSender(UserModel sender) {

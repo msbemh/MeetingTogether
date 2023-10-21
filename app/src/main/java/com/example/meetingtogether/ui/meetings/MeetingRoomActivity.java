@@ -15,6 +15,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -47,6 +48,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.res.ResourcesCompat;
+import androidx.exifinterface.media.ExifInterface;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -183,7 +185,7 @@ import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.google.mlkit.vision.face.FaceLandmark;
 
 public class MeetingRoomActivity extends AppCompatActivity {
-    private static final String TAG = "TEST";
+    public static final String TAG = "TEST";
     public static final String VIDEO_TRACK_ID = "ARDAMSv0";
     public static final String SCREEN_TRACK_ID = "ARDAMSv0";
     public static final int VIDEO_RESOLUTION_WIDTH = 1280;
@@ -213,6 +215,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private List<CustomQueue> queueList = new ArrayList<>();
 
     private Handler handler;
+    private Handler chatHandler;
 
     // 미디어 제약사항
     private MediaConstraints sdpMediaConstraints;
@@ -256,7 +259,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public float right_eye_x = -1;
     public float right_eye_y = -1;
     private Bitmap mask1;
-//    private VectorDrawable mask2;
+    //    private VectorDrawable mask2;
     private int cnt = 0;
 
     private PeersFragment peersFragment;
@@ -268,7 +271,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private MeetingRoomChatFragment meetingRoomChatFragment;
     private FragmentMeetingRoomChatBinding meetingRoomChatBinding;
 
-    /** 마스크1(스파이더맨) 변수 */
+    /**
+     * 마스크1(스파이더맨) 변수
+     */
     private float mask1OriginalW = 518;
     private float mask1OriginalH = 518;
     private float mask1OriginalD = 160;
@@ -300,6 +305,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private RetrofitInterface service;
 
     /**
+     * service
      * 필요한 권한
      */
     private final String[] MEETING_PERMISSIONS = {
@@ -312,34 +318,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
     /**
      * 미팅 권한 요청에 대한 Callback
      */
-    private ActivityResultLauncher meetingPermissionLauncher =  registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), new ActivityResultCallback<Map<String, Boolean>>() {
+    private ActivityResultLauncher meetingPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), new ActivityResultCallback<Map<String, Boolean>>() {
         @Override
         public void onActivityResult(Map<String, Boolean> result) {
-            Log.d(TAG, ""+result.toString());
+            Log.d(TAG, "" + result.toString());
 
             Boolean areAllGranted = true;
             // 모든 권한에 동의 했는지 확인
             Iterator iterator = result.keySet().iterator();
-            while(iterator.hasNext()){
+            while (iterator.hasNext()) {
                 String permissionName = iterator.next().toString();
                 boolean isAllowed = result.get(permissionName);
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
                     areAllGranted = areAllGranted && isAllowed;
-                }else{
-                    if(permissionName.equals("android.permission.FOREGROUND_SERVICE")) continue;
-                    if(permissionName.equals("android.permission.POST_NOTIFICATIONS")) continue;
+                } else {
+                    if (permissionName.equals("android.permission.FOREGROUND_SERVICE")) continue;
+                    if (permissionName.equals("android.permission.POST_NOTIFICATIONS")) continue;
                 }
             }
 
             // 모든 권한에 동의
-            if(areAllGranted) {
-                // 화상 채팅 연결 시작
-                start();
-
+            if (areAllGranted) {
                 // 시그널링 서버와 연결
                 connectToSignallingServer();
                 // 모든 권한에 동의 하지 않음
-            }else{
+            } else {
                 showPermissionDialog();
             }
         }
@@ -353,88 +356,174 @@ public class MeetingRoomActivity extends AppCompatActivity {
         @Override
         public void onActivityResult(ActivityResult result) {
             try {
-                if(result.getResultCode() == RESULT_OK){
+                if (result.getResultCode() == RESULT_OK) {
                     Intent data = result.getData();
 
                     ClipData clipData = data.getClipData();
                     Log.d(TAG, String.valueOf(clipData.getItemCount()));
 
                     // 선택한 이미지가 11장 이상인 경우
-                    if(clipData.getItemCount() > 10){
+                    if (clipData.getItemCount() > 10) {
                         Toast.makeText(getApplicationContext(), "사진은 10장까지 선택 가능합니다.", Toast.LENGTH_LONG).show();
-                    // 선택한 이미지가 1장 이상 10장 이하인 경우
-                    }else {
+                        // 선택한 이미지가 1장 이상 10장 이하인 경우
+                    } else {
                         Log.d(TAG, "multiple choice");
 
-                        ArrayList<MultipartBody.Part> files = new ArrayList<>();
-                        for (int i = 0; i < clipData.getItemCount(); i++) {
-                            Uri imageUri = clipData.getItemAt(i).getUri();  // 선택한 이미지들의 uri를 가져온다.
-                            try {
-                                Bitmap bitmap = MediaStore.Images.Media.getBitmap(MeetingRoomActivity.this.getContentResolver(), imageUri);
-                                Log.d(TAG, "bitmap:" + bitmap);
-                                File file = saveBitmapToPng(bitmap, MeetingRoomActivity.this);
-
-                                // MultipartBody.Part로 파일 생성
-                                RequestBody requestBody = RequestBody.create(MediaType.parse("multipart/form-data"), file);
-                                MultipartBody.Part part = MultipartBody.Part.createFormData("photos", file.getName(), requestBody);
-                                files.add(part);
-                            } catch (Exception e) {
-                                Log.e(TAG, "File select error", e);
-                            }
-                        }
-
-                        Call<RetrofitResponse> call = service.postImages(files);
-                        call.enqueue(new Callback<RetrofitResponse>() {
+                        chatHandler.post(new Runnable() {
                             @Override
-                            public void onResponse(Call<RetrofitResponse> call, Response<RetrofitResponse> response) {
-                                // 응답 처리
-                                if (response.isSuccessful()) {
-                                    RetrofitResponse retrofitResponse = response.body();
-                                    List<FileInfo> fileInfoList = retrofitResponse.getFileInfo();
-                                    for (FileInfo fileInfo : fileInfoList) {
-                                        UserModel userModel = getUserModel(socketId);
-                                        String date = getCurrentLocalDateTime();
-                                        String filename = fileInfo.getFieldname();
-                                        // 메시지 추가
-                                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, null, filename, userModel, date));
+                            public void run() {
+                                ArrayList<MultipartBody.Part> files = new ArrayList<>();
+                                for (int i = 0; i < clipData.getItemCount(); i++) {
+                                    Uri imageUri = clipData.getItemAt(i).getUri();  // 선택한 이미지들의 uri를 가져온다.
+                                    try {
+                                        Bitmap bitmap = MediaStore.Images.Media.getBitmap(MeetingRoomActivity.this.getContentResolver(), imageUri);
 
-                                        // 연결된 피어 모두애게 그리기 정보를 보낸다.
-                                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++){
-                                            CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
-                                            DataChannel dataChannel = customPeerConnection.getDataChannel();
-                                            String cmd = "chat";
-                                            String type = "img";
-                                            String data = cmd + ";" + type + ";" + fileInfo.getFieldname() + ";" + date;
-                                            ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
-                                            dataChannel.send(new DataChannel.Buffer(buffer, false));
+                                        /** 사이즈 max 500 기준으로 리사이징 (비율 유지) */
+                                        bitmap = resizeBitmapImage(bitmap);
+
+                                        /** Width > Height 면, 이미지를 회전 시킨다. */
+                                        ExifInterface exifInterface = new ExifInterface(getContentResolver().openInputStream(imageUri));
+                                        int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+
+                                        // 방향 정보에 따라 이미지를 회전 또는 뒤집을 수 있습니다.
+                                        Matrix rotateMatrix = new Matrix();
+                                        switch (orientation) {
+                                            case ExifInterface.ORIENTATION_ROTATE_90:
+                                                rotateMatrix.postRotate(90);
+                                                break;
+                                            case ExifInterface.ORIENTATION_ROTATE_180:
+                                                rotateMatrix.postRotate(180);
+                                                break;
+                                            case ExifInterface.ORIENTATION_ROTATE_270:
+                                                rotateMatrix.postRotate(270);
+                                                break;
+                                            case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                                                // 이미지를 수평으로 뒤집음
+                                                break;
+                                            case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                                                // 이미지를 수직으로 뒤집음
+                                                break;
                                         }
+
+                                        bitmap = Bitmap.createBitmap(bitmap, 0, 0,
+                                                bitmap.getWidth(), bitmap.getHeight(), rotateMatrix, false);
+
+                                        Log.d(TAG, "bitmap:" + bitmap);
+                                        File file = saveBitmapToJpeg(bitmap, MeetingRoomActivity.this);
+
+                                        // MultipartBody.Part로 파일 생성
+                                        RequestBody requestBody = RequestBody.create(MediaType.parse("multipart/form-data"), file);
+//                                        MultipartBody.Part part = MultipartBody.Part.createFormData("photos", file.getName(), requestBody);
+                                        MultipartBody.Part part = MultipartBody.Part.createFormData("photo", file.getName(), requestBody);
+                                        files.add(part);
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "File select error", e);
                                     }
+                                }
 
-                                    // 성공하면, 자신에게 send Message를 표시해준다.
-                                    runOnUiThread(new Runnable() {
+                                /** 한번에 여러 이미지를 보낼 수도 있지만, 1개씩 보내주자 */
+                                for(int i=0; i<files.size(); i++){
+                                    MultipartBody.Part file = files.get(i);
+                                    Call<RetrofitResponse> call = service.postImage(file);
+                                    call.enqueue(new Callback<RetrofitResponse>() {
                                         @Override
-                                        public void run() {
-                                            // 리사이클러뷰 새롭게 인지
-                                            meetingRoomChatBinding.meetingRoomChatRecyclerView.getAdapter().notifyDataSetChanged();
+                                        public void onResponse(Call<RetrofitResponse> call, Response<RetrofitResponse> response) {
+                                            // 응답 처리
+                                            if (response.isSuccessful()) {
+                                                RetrofitResponse retrofitResponse = response.body();
+                                                FileInfo fileInfo = retrofitResponse.getFileInfo();
+                                                UserModel userModel = getUserModel(socketId);
+                                                String date = getCurrentLocalDateTime();
+                                                String filename = fileInfo.getFieldname();
+                                                // 메시지 추가
+                                                chatList.add(new MessageModel(MessageModel.MessageType.SEND, null, filename, userModel, date));
 
-                                            // 스크롤 제일 아래로
-                                            // messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                                // 연결된 피어 모두애게 그리기 정보를 보낸다.
+                                                for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
+                                                    CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+                                                    DataChannel dataChannel = customPeerConnection.getDataChannel();
+                                                    String cmd = "chat";
+                                                    String type = "img";
+                                                    String data = cmd + ";" + type + ";" + fileInfo.getFieldname() + ";" + date;
+                                                    ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
+                                                    dataChannel.send(new DataChannel.Buffer(buffer, false));
+                                                }
+
+                                                // 성공하면, 자신에게 send Message를 표시해준다.
+                                                runOnUiThread(new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        // 리사이클러뷰 새롭게 인지
+                                                        meetingRoomChatBinding.meetingRoomChatRecyclerView.getAdapter().notifyDataSetChanged();
+                                                    }
+                                                });
+
+                                            }
+                                            Log.d(TAG, response.message());
+                                        }
+
+                                        @Override
+                                        public void onFailure(Call<RetrofitResponse> call, Throwable t) {
+                                            // 오류 처리
+                                            Log.d(TAG, t.getMessage());
                                         }
                                     });
-
                                 }
-                                Log.d(TAG, response.message());
-                            }
-
-                            @Override
-                            public void onFailure(Call<RetrofitResponse> call, Throwable t) {
-                                // 오류 처리
-                                Log.d(TAG, t.getMessage());
+                                /** files를 한번에 다 보내기 */
+//                                Call<RetrofitResponse> call = service.postImages(files);
+//                                call.enqueue(new Callback<RetrofitResponse>() {
+//                                    @Override
+//                                    public void onResponse(Call<RetrofitResponse> call, Response<RetrofitResponse> response) {
+//                                        // 응답 처리
+//                                        if (response.isSuccessful()) {
+//                                            RetrofitResponse retrofitResponse = response.body();
+//                                            List<FileInfo> fileInfoList = retrofitResponse.getFileInfo();
+//                                            for (FileInfo fileInfo : fileInfoList) {
+//                                                UserModel userModel = getUserModel(socketId);
+//                                                String date = getCurrentLocalDateTime();
+//                                                String filename = fileInfo.getFieldname();
+//                                                // 메시지 추가
+//                                                chatList.add(new MessageModel(MessageModel.MessageType.SEND, null, filename, userModel, date));
+//
+//                                                // 연결된 피어 모두애게 그리기 정보를 보낸다.
+//                                                for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
+//                                                    CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+//                                                    DataChannel dataChannel = customPeerConnection.getDataChannel();
+//                                                    String cmd = "chat";
+//                                                    String type = "img";
+//                                                    String data = cmd + ";" + type + ";" + fileInfo.getFieldname() + ";" + date;
+//                                                    ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
+//                                                    dataChannel.send(new DataChannel.Buffer(buffer, false));
+//                                                }
+//                                            }
+//
+//                                            // 성공하면, 자신에게 send Message를 표시해준다.
+//                                            runOnUiThread(new Runnable() {
+//                                                @Override
+//                                                public void run() {
+//                                                    // 리사이클러뷰 새롭게 인지
+//                                                    meetingRoomChatBinding.meetingRoomChatRecyclerView.getAdapter().notifyDataSetChanged();
+//
+//                                                    // 스크롤 제일 아래로
+//                                                    // messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+//                                                }
+//                                            });
+//
+//                                        }
+//                                        Log.d(TAG, response.message());
+//                                    }
+//
+//                                    @Override
+//                                    public void onFailure(Call<RetrofitResponse> call, Throwable t) {
+//                                        // 오류 처리
+//                                        Log.d(TAG, t.getMessage());
+//                                    }
+//                                });
                             }
                         });
                     }
-                // 취소
-                }else {
+                    // 취소
+                } else {
                     Toast.makeText(MeetingRoomActivity.this, "취소 됐습니다.", Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
@@ -443,12 +532,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     });
 
-    private void showPermissionDialog(){
+    private void showPermissionDialog() {
         AlertDialog.Builder localBuilder = new AlertDialog.Builder(this);
         localBuilder.setTitle("권한 설정")
                 .setMessage("권한 거절로 인해 일부기능이 제한됩니다.")
-                .setPositiveButton("권한 설정하러 가기", new DialogInterface.OnClickListener(){
-                    public void onClick(DialogInterface paramAnonymousDialogInterface, int paramAnonymousInt){
+                .setPositiveButton("권한 설정하러 가기", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface paramAnonymousDialogInterface, int paramAnonymousInt) {
                         try {
                             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                     .setData(Uri.parse("package:" + getPackageName()));
@@ -459,11 +548,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             Intent intent = new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
                             startActivity(intent);
                         }
-                    }})
+                    }
+                })
                 .setNegativeButton("취소하기", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface paramAnonymousDialogInterface, int paramAnonymousInt) {
-                        Toast.makeText(MeetingRoomActivity.this, "권한을 취소하셨습니다.",Toast.LENGTH_SHORT).show();
-                    }})
+                        Toast.makeText(MeetingRoomActivity.this, "권한을 취소하셨습니다.", Toast.LENGTH_SHORT).show();
+                    }
+                })
                 .create()
                 .show();
     }
@@ -471,15 +562,15 @@ public class MeetingRoomActivity extends AppCompatActivity {
     /**
      * SYSTEM_ALERT_WINDOW 권한 체크
      */
-    private ActivityResultLauncher systemPermissionLauncher =  registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+    private ActivityResultLauncher systemPermissionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
         @Override
         public void onActivityResult(ActivityResult result) {
-            if(Settings.canDrawOverlays(MeetingRoomActivity.this)){
+            if (Settings.canDrawOverlays(MeetingRoomActivity.this)) {
                 Log.d(TAG, "SYSTEM_ALERT_WINDOW 권한 완료");
                 // 여기서 화면 프로젝션 토큰을 받아오자.
                 mediaProjectionManager = getSystemService(MediaProjectionManager.class);
                 mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
-            }else{
+            } else {
                 Log.d(TAG, "SYSTEM_ALERT_WINDOW 권한 없음");
             }
         }
@@ -519,8 +610,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                      *
                      * 나머지 사람들 전체에 모두 피어를 생성한다.
                      */
-                    if(!"".equals(shareId) && shareId.equals(socketId)){
-                        for (int i = 0; i < userList.size(); i++){
+                    if (!"".equals(shareId) && shareId.equals(socketId)) {
+                        for (int i = 0; i < userList.size(); i++) {
                             UserModel userModel = userList.get(i);
                             createPeerAndDoOffer(userModel.clientId, Common.SCREEN);
                         }
@@ -534,9 +625,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
             });
 
             CustomCapturer customCapturer = getCustomVideoCapturer(Common.SCREEN);
-            if(customCapturer == null) {
+            if (customCapturer == null) {
                 meetingService.createCapturer(Common.SCREEN);
-            }else{
+            } else {
                 // 카메라 캡처 시작
                 VideoCapturer videoCapturer = customCapturer.getVideoCapturer();
                 videoCapturer.startCapture(VIDEO_RESOLUTION_WIDTH, VIDEO_RESOLUTION_HEIGHT, FPS);
@@ -545,8 +636,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 meetingService.enableCaptureDisplayRectangle(true);
 
                 // [화면 공유 Peer 생성]
-                if(!"".equals(shareId) && shareId.equals(socketId)){
-                    for (int i = 0; i < userList.size(); i++){
+                if (!"".equals(shareId) && shareId.equals(socketId)) {
+                    for (int i = 0; i < userList.size(); i++) {
                         UserModel userModel = userList.get(i);
                         createPeerAndDoOffer(userModel.clientId, Common.SCREEN);
                     }
@@ -557,10 +648,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
             Intent intent = new Intent(MeetingRoomActivity.this, MeetingService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent);
-            }else{
+            } else {
                 startService(intent);
             }
         }
+
         @Override
         public void onServiceDisconnected(ComponentName componentName) {
             isMeetingServiceBound = false;
@@ -583,9 +675,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     mediaProjectionResultCode = result.getResultCode();
                     mediaProjectionResultData = result.getData();
 
-                    if(isMeetingServiceBound) return;
+                    if (isMeetingServiceBound) return;
 
-                    if(!isForegroundServiceRunning(this, MeetingService.class)){
+                    if (!isForegroundServiceRunning(this, MeetingService.class)) {
                         // 여기서 포그라운드 서비스 실행
                         // 미팅 서비스 시작
                         Intent intent = new Intent(this, MeetingService.class);
@@ -614,7 +706,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //        mask2 = (VectorDrawable) ResourcesCompat.getDrawable(getResources(), R.drawable.test, null);
 
         /** 실제 이미지 크기(픽셀)과 안드로이드로 불러온 이미지 크기(픽셀)의 차이 비율 계산 */
-        mask1Ratio = mask1.getWidth()/mask1OriginalW;
+        mask1Ratio = mask1.getWidth() / mask1OriginalW;
 
         mask1AdjustedW = mask1.getWidth();
         mask1AdjustedH = mask1.getHeight();
@@ -630,6 +722,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onCreated(FragmentPeersBinding peersBinding) {
                 MeetingRoomActivity.this.peersBinding = peersBinding;
+
+                // 로컬 세팅 시작
+                localSetting();
 
 //                handler.postDelayed(new Runnable() {
 //                    @Override
@@ -702,7 +797,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         });
 
                         // 연결된 피어 모두애게 그리기 정보를 보낸다.
-                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++){
+                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
                             CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
                             DataChannel dataChannel = customPeerConnection.getDataChannel();
                             String cmd = "chat";
@@ -737,30 +832,48 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     public void onBindViewListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType) {
                         Log.d(TAG, "viewHolder:" + viewHolder);
                         Log.d(TAG, "view:" + view);
-                        if(viewType == MessageModel.MessageType.RECEIVE.getValue()){
+                        if (viewType == MessageModel.MessageType.RECEIVE.getValue()) {
                             viewHolder.setReceiveBinding(ReceiveMessageRowItemBinding.bind(view));
-                        }else{
+                        } else {
                             viewHolder.setSendBinding(SendMessageRowItemBinding.bind(view));
                         }
                     }
+
                     // TODO: ViewBind 변경
                     // 실제 View 와 데이터 연동
                     @Override
                     public void onBindViewHolderListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
+                        Log.d(TAG, "[onBindViewHolderListener] 동작");
+                        Log.d(TAG, "[position:" + position);
+
                         MessageModel messageModel = chatList.get(position);
+
+                        Log.d(TAG, "messageModel:" + messageModel);
+
                         // 받은 메시지
-                        if(chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()){
-                            ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding)(holder.receiveBinding);
+                        if (chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()) {
+                            ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding) (holder.receiveBinding);
                             /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
                             String filename = messageModel.getFilename();
-                            if(filename != null){
-                                binding.msgContent.setVisibility(View.GONE);
-                                binding.msgImage.setVisibility(View.VISIBLE);
 
+                            Log.d(TAG, "filename:" + filename);
+
+                            if (filename != null) {
+                                binding.msgContent.setVisibility(View.GONE);
+                                binding.receiveDate.setVisibility(View.GONE);
+
+                                binding.msgImage.setVisibility(View.VISIBLE);
+                                binding.receiveImgDate.setVisibility(View.VISIBLE);
+
+                                binding.receiveImgDate.setText(messageModel.getDate());
+
+                                Log.d(TAG, "Glide 동작");
                                 // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
                                 Glide
                                     .with(MeetingRoomActivity.this)
                                     .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    /** Glide는 원본 비율을 유지한다. */
+                                    .override(500,500)
                                     .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
                                     .listener(new RequestListener<Drawable>() {
                                         @Override
@@ -771,28 +884,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                                         @Override
                                         public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                            // 이미지 로딩이 완료되었을 때 수행할 작업
-                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                            Log.d(TAG, "Glide 이미지 로드 완료");
                                             return false;
                                         }
                                     })
                                     .into(binding.msgImage);
-                            }else{
+
+                            } else {
                                 binding.msgContent.setVisibility(View.VISIBLE);
+                                binding.receiveDate.setVisibility(View.VISIBLE);
+
                                 binding.msgImage.setVisibility(View.GONE);
+                                binding.receiveImgDate.setVisibility(View.GONE);
 
                                 binding.msgContent.setText(messageModel.getMsg());
+                                binding.receiveDate.setText(messageModel.getDate());
                             }
 
                             binding.name.setText(messageModel.getSender().getClientId());
-                            binding.receiveDate.setText(messageModel.getDate());
                         // 보낸 메시지
-                        }else{
-                            SendMessageRowItemBinding binding = (SendMessageRowItemBinding)(holder.sendBinding);
+                        } else {
+                            SendMessageRowItemBinding binding = (SendMessageRowItemBinding) (holder.sendBinding);
 
                             /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
                             String filename = messageModel.getFilename();
-                            if(filename != null){
+                            if (filename != null) {
                                 binding.msgContent.setVisibility(View.GONE);
                                 binding.msgImage.setVisibility(View.VISIBLE);
 
@@ -801,6 +917,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 Glide
                                     .with(MeetingRoomActivity.this)
                                     .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    .override(500,500)
                                     .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
                                     .listener(new RequestListener<Drawable>() {
                                         @Override
@@ -811,13 +928,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                                         @Override
                                         public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                            // 이미지 로딩이 완료되었을 때 수행할 작업
-                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
                                             return false;
                                         }
                                     })
                                     .into(binding.msgImage);
-                            }else{
+                            } else {
                                 binding.msgContent.setVisibility(View.VISIBLE);
                                 binding.msgImage.setVisibility(View.GONE);
 
@@ -825,8 +940,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             }
 
                             binding.sendDate.setText(messageModel.getDate());
+                            binding.sendImgDate.setText(messageModel.getDate());
                         }
                     }
+
                     // TODO: 레이아웃 변경
                     // 레이아웃 설정
                     @Override
@@ -843,6 +960,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     @Override
                     public void onItemClickListener(View view, int position) {
                     }
+
                     @Override
                     public void onItemLongClickListener(View view, int position) {
                     }
@@ -884,16 +1002,20 @@ public class MeetingRoomActivity extends AppCompatActivity {
         handlerThread.start();
         handler = new Handler(handlerThread.getLooper());
 
+        HandlerThread handlerChatThread = new HandlerThread("chatThread");
+        handlerChatThread.start();
+        chatHandler = new Handler(handlerChatThread.getLooper());
+
         meetingPermissionLauncher.launch(MEETING_PERMISSIONS);
 
         binding.cameraOnOffButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 VideoTrack videoTrack = getCustomTrack(Common.VIDEO).getVideoTrack();
-                if(isVideoOn){
+                if (isVideoOn) {
                     videoTrack.setEnabled(false);
                     isVideoOn = false;
-                }else{
+                } else {
                     videoTrack.setEnabled(true);
                     isVideoOn = true;
                 }
@@ -904,10 +1026,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 AudioTrack audioTrack = getCustomTrack(Common.VIDEO).getAudioTrack();
-                if(isAudioOn){
+                if (isAudioOn) {
                     audioTrack.setEnabled(false);
                     isAudioOn = false;
-                }else{
+                } else {
                     audioTrack.setEnabled(true);
                     isAudioOn = true;
                 }
@@ -917,8 +1039,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
         binding.screenShareButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(socket == null){
-                    Toast.makeText(MeetingRoomActivity.this, "소켓 연길이 되지 않았습니다.",Toast.LENGTH_SHORT).show();
+                if (socket == null) {
+                    Toast.makeText(MeetingRoomActivity.this, "소켓 연길이 되지 않았습니다.", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -929,8 +1051,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
         binding.whiteBoardButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(socket == null){
-                    Toast.makeText(MeetingRoomActivity.this, "소켓 연길이 되지 않았습니다.",Toast.LENGTH_SHORT).show();
+                if (socket == null) {
+                    Toast.makeText(MeetingRoomActivity.this, "소켓 연길이 되지 않았습니다.", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -941,9 +1063,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
         binding.faceMaskButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(!isFaceMode){
+                if (!isFaceMode) {
                     isFaceMode = true;
-                }else{
+                } else {
                     isFaceMode = false;
                 }
             }
@@ -952,7 +1074,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         binding.chatButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(meetingRoomChatFragment != null) {
+                if (meetingRoomChatFragment != null) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -995,7 +1117,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     private int noCnt = 0;
 
-    private String getCurrentLocalDateTime(){
+    private String getCurrentLocalDateTime() {
         // 현재 날짜/시간
         LocalDateTime now = LocalDateTime.now();
 
@@ -1005,11 +1127,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return formatedNow;
     }
 
-    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap){
+    private void calculateFaceInfo(List<Face> faces, Bitmap bitmap) {
 
-        if(faces.size() == 0){
+        if (faces.size() == 0) {
             noCnt++;
-            if(noCnt >= 7){
+            if (noCnt >= 7) {
                 faceRect = null;
                 faceDistance = -1;
                 noCnt = 0;
@@ -1042,24 +1164,24 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 float maxEyeX = -1;
                 float maxEyeY = -1;
 
-                if(left_eye_x > right_eye_x){
+                if (left_eye_x > right_eye_x) {
                     minEyeX = right_eye_x;
                     maxEyeX = left_eye_x;
-                }else if(left_eye_x < right_eye_x){
+                } else if (left_eye_x < right_eye_x) {
                     minEyeX = left_eye_x;
                     maxEyeX = right_eye_x;
-                }else {
+                } else {
                     minEyeX = left_eye_x;
                     maxEyeX = left_eye_x;
                 }
 
-                if(left_eye_y > right_eye_y){
+                if (left_eye_y > right_eye_y) {
                     minEyeY = right_eye_y;
                     maxEyeY = left_eye_y;
-                }else if(left_eye_y < right_eye_y){
+                } else if (left_eye_y < right_eye_y) {
                     minEyeY = left_eye_y;
                     maxEyeY = right_eye_y;
-                }else {
+                } else {
                     minEyeY = left_eye_y;
                     maxEyeY = left_eye_y;
                 }
@@ -1067,15 +1189,15 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                 // 실제 얼굴 눈 사이의 거리
                 faceDistance = calDistance(leftEyePos, rightEyePos);
-                faceCX = minEyeX + (maxEyeX - minEyeX)/2;
-                faceCY = minEyeY + (maxEyeY - minEyeY)/2;
+                faceCX = minEyeX + (maxEyeX - minEyeX) / 2;
+                faceCY = minEyeY + (maxEyeY - minEyeY) / 2;
 
                 /**
                  * 실제 얼굴과 조정된 마스크 사이의 비율
                  * 비율 = (실제 얼굴의 눈 사이의 거리)/(조정된 마스크의 눈 사이의 거리)
                  */
                 mask1AdjustedD = mask1OriginalD * mask1Ratio;
-                mask1FaceRatio = faceDistance/mask1AdjustedD;
+                mask1FaceRatio = faceDistance / mask1AdjustedD;
 
                 /** 실제 얼굴과 안드로이드 마스크 사이의 비율로 크기 조정  */
                 mask1 = resizeBitmap(BitmapFactory.decodeResource(getResources(), R.drawable.mask1), mask1FaceRatio);
@@ -1089,8 +1211,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 /** faceRect 높이 만큼 마스크 높이를 늘린다. */
                 int changeWidth = (int) (faceRect.width() * 1.6);
                 int changeHeight = (int) (faceRect.height() * 1.4);
-                float changeWidthRatio = changeWidth/mask1AdjustedW;
-                float changeHeightRatio = changeHeight/mask1AdjustedH;
+                float changeWidthRatio = changeWidth / mask1AdjustedW;
+                float changeHeightRatio = changeHeight / mask1AdjustedH;
 
                 mask1AdjustedW = mask1AdjustedW * changeWidthRatio;
                 mask1AdjustedH = mask1AdjustedH * changeHeightRatio;
@@ -1138,31 +1260,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public void replaceFragment(Fragment fragment) {
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-        
-        if(fragment instanceof PeersFragment){
+
+        if (fragment instanceof PeersFragment) {
             fragmentTransaction
                     .hide(whiteboardFragment)
                     .hide(meetingRoomChatFragment)
                     .show(fragment)
                     .commit();
             meetingMode = PEERS;
-        }else if(fragment instanceof WhiteboardFragment){
+        } else if (fragment instanceof WhiteboardFragment) {
             fragmentTransaction
                     .hide(peersFragment)
                     .hide(meetingRoomChatFragment)
                     .show(fragment)
                     .commit();
             meetingMode = WHITE_BOARD;
-        }else if(fragment instanceof MeetingRoomChatFragment){
+        } else if (fragment instanceof MeetingRoomChatFragment) {
             // 현재 show된 프래그먼트가 채팅일 경우
-            if(CHAT.equals(meetingMode)){
+            if (CHAT.equals(meetingMode)) {
                 fragmentTransaction
                         .hide(meetingRoomChatFragment)
                         .hide(whiteboardFragment)
                         .show(peersFragment)
                         .commit();
                 meetingMode = PEERS;
-            }else{
+            } else {
                 fragmentTransaction
                         .hide(whiteboardFragment)
                         .hide(peersFragment)
@@ -1188,8 +1310,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
         super.onResume();
     }
 
-    private void videoTrackSetEnabled(Boolean isEnable){
-        for (int i = 0; i < trackList.size(); i++){
+    private void videoTrackSetEnabled(Boolean isEnable) {
+        for (int i = 0; i < trackList.size(); i++) {
             CustomTrack customTrack = trackList.get(i);
             VideoTrack videoTrack = customTrack.getVideoTrack();
             String tagFlag = getTypeTag(customTrack.getType());
@@ -1199,13 +1321,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     }
 
-    private CustomPeerConnection createCustomPeerConnection(String clientId, String type, CreateCustomPeerConnResult createCustomPeerConnResult){
+    private CustomPeerConnection createCustomPeerConnection(String clientId, String type, CreateCustomPeerConnResult createCustomPeerConnResult) {
         // 자기 자신은 제외
-        if(socketId.equals(clientId)) return null;
+        if (socketId.equals(clientId)) return null;
 
         // 이미 존재 하는 피어 제외
         CustomPeerConnection customPeerConnection = getCustomPeerConnection(clientId, type);
-        if(customPeerConnection != null) return null;
+        if (customPeerConnection != null) return null;
 
         // 피어 생성
         customPeerConnection = createPeerConnection(factory, clientId, type, createCustomPeerConnResult);
@@ -1220,13 +1342,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return customPeerConnection;
     }
 
-    private String getTagFlagString(String clientId, String type){
-        if(clientId.equals("local")) return "[local:" + clientId + "]";
+    private String getTagFlagString(String clientId, String type) {
+        if (clientId.equals("local")) return "[local:" + clientId + "]";
         return "[" + type + " peer:" + clientId + "]";
     }
 
     // ICE Candidate 데이터가 존재하면 모두 밀어 넣는다.
-    private void drainQueue(CustomPeerConnection customPeerConnection, CustomQueue customQueue){
+    private void drainQueue(CustomPeerConnection customPeerConnection, CustomQueue customQueue) {
         String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
 
         Queue<IceCandidate> iceQueue = customQueue.getQueue();
@@ -1238,7 +1360,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 화면 공유 시작
-    private void screenSharingStart(){
+    private void screenSharingStart() {
         /**
          * SYSTEM_ALERT_WINDOW 권한 체크
          */
@@ -1246,7 +1368,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
             systemPermissionLauncher.launch(intent);
-        }else{
+        } else {
             // 여기서 화면 프로젝션 토큰을 받아오자.
             mediaProjectionManager = getSystemService(MediaProjectionManager.class);
             mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
@@ -1282,7 +1404,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void start() {
+    private void localSetting() {
 //            Log.d(TAG, "[스레드 네임]" + Thread.currentThread().getName());
 
         // 미디어 설정 초기화
@@ -1320,11 +1442,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return Math.round((float) dp * density);
     }
 
-    private void initializeCapturer(String type, CustomCapturer screenCapturer){
+    private void initializeCapturer(String type, CustomCapturer screenCapturer) {
         CustomCapturer customCapturer = null;
-        if(Common.VIDEO.equals(type)){
+        if (Common.VIDEO.equals(type)) {
             customCapturer = new CustomCapturer(type, MeetingRoomActivity.this);
-        }else if(Common.SCREEN.equals(type)){
+        } else if (Common.SCREEN.equals(type)) {
             customCapturer = screenCapturer;
         }
 
@@ -1352,16 +1474,15 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //        int height = ConvertDPtoPX(this, peersBinding.mainSurfaceView.getHeight());
         TextureBufferImpl buffer = new TextureBufferImpl(VIDEO_RESOLUTION_HEIGHT, VIDEO_RESOLUTION_WIDTH, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
 
-        if(VIDEO.equals(type)){
+        if (VIDEO.equals(type)) {
             ((Camera2Capturer) videoCapturer).setCameraCaptureInterface(new CameraCaptureInterface() {
                 @Override
                 public void onBeforeCapture(CapturerObserver capturerObserver, VideoFrame frame) {
-                    if(isFaceMode){
+                    if (isFaceMode) {
                         Bitmap bitmap = convertVideoFrameToBitmap(frame);
 //                    Log.d(TAG, "bitmap:" + bitmap);
 
                         Canvas canvas = new Canvas(bitmap);
-
 
 
 //                        Canvas canvas = new Canvas(bitmap);
@@ -1371,19 +1492,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //                        mask2.draw(canvas);
 
 
-                        if(faceRect != null){
+                        if (faceRect != null) {
 //                            canvas.drawRect(faceRect, paint);
                         }
 
                         // 왼쪽눈 오른쪽 눈에 대한 정보가 있다면 그려주자
-                        if(faceDistance >= 0) {
+                        if (faceDistance >= 0) {
 //                            mask2.draw(canvas);
-                            canvas.drawBitmap(mask1, differenceX,differenceY, null);
+                            canvas.drawBitmap(mask1, differenceX, differenceY, null);
                         }
 
                         /** 50번 캡처하면 그때 1번 얼굴 인식을 한다. */
                         cnt++;
-                        if(cnt >= 25){
+                        if (cnt >= 25) {
                             cnt = 0;
                             Bitmap copyBitmap = bitmap;
                             handler.post(new Runnable() {
@@ -1415,7 +1536,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             long frameTime = System.nanoTime() - start;
                             VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
 
-                            if(isFaceMode){
+                            if (isFaceMode) {
                                 capturerObserver.onFrameCaptured(videoFrame);
                             }
                             videoFrame.release();
@@ -1446,7 +1567,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     }
 
-    private void faceDetect(Bitmap bitmap){
+    private void faceDetect(Bitmap bitmap) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
 //        Log.d(TAG, "image:" + image);
 
@@ -1474,7 +1595,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private VideoFrameDrawer frameDrawer = new VideoFrameDrawer();
     private Matrix drawMatrix = new Matrix();
 
-    public Bitmap convertVideoFrameToBitmap(VideoFrame frame){
+    public Bitmap convertVideoFrameToBitmap(VideoFrame frame) {
         return peersBinding.mainSurfaceView.eglRenderer.convertVideoFrameToBitmap(frame);
     }
 
@@ -1504,7 +1625,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return bitmap;
     }
 
-    private ProxySink createProxySink(String clientId, String type){
+    private ProxySink createProxySink(String clientId, String type) {
         ProxySink proxySink = new ProxySink(clientId, type);
         String tagFlag = getTagFlagString(clientId, type);
 
@@ -1517,17 +1638,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return proxySink;
     }
 
-    private void bindTrackAndView(String clientId, String type, SurfaceViewRenderer surfaceViewRenderer, VideoTrack remoteVideoTrack){
+    private void bindTrackAndView(String clientId, String type, SurfaceViewRenderer surfaceViewRenderer, VideoTrack remoteVideoTrack) {
         ProxySink proxySink = getProxySink(clientId, type);
         String tagFlag = getTagFlagString(clientId, type);
 
-        if(clientId.equals("local")) {
+        if (clientId.equals("local")) {
             proxySink.setTarget(surfaceViewRenderer);
             Log.d(TAG, tagFlag + "surfaceViewRenderer:" + surfaceViewRenderer);
             CustomTrack customTrack = getCustomTrack(type);
             VideoTrack videoTrack = customTrack.getVideoTrack();
             videoTrack.addSink(proxySink);
-        }else{
+        } else {
             remoteVideoTrack.addSink(proxySink);
         }
     }
@@ -1596,12 +1717,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 removeElementAboutUserList(userList, clientId);
 
                 // 화이트보드 제거
-                if("".equals(whiteboardSocketId) || whiteboardSocketId == null){
+                if ("".equals(whiteboardSocketId) || whiteboardSocketId == null) {
                     stopWhiteboard();
                 }
 
                 Log.d(TAG, "[userId:" + clientId + "] userList 에서 제거");
-                Log.d(TAG, "userList:"+userList);
+                Log.d(TAG, "userList:" + userList);
 
             }).on("created", args -> {
                 Log.d(TAG, "[방 생성]");
@@ -1622,7 +1743,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     shareId = message.optString("shareId");
                     String shareStatus = message.optString("shareStatus");
 
-                    if("".equals(whiteboardId) || whiteboardId == null){
+                    if ("".equals(whiteboardId) || whiteboardId == null) {
                         whiteboardId = message.optString("whiteboardId");
                     }
                     whiteboardStatus = message.optString("whiteboardStatus");
@@ -1665,9 +1786,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                  * 새롭게 들어온 유저(initiator)가 자기 자신인 유저가 피어를 생성하고 Offer를 전송한다.
                                  * 자기 자신에 대한 피어는 필요 없으니 제외
                                  */
-                                if (initiator.equals(socketId)){
+                                if (initiator.equals(socketId)) {
                                     // 나 자신은 제외
-                                    if(userModel.clientId.equals(socketId)) continue;
+                                    if (userModel.clientId.equals(socketId)) continue;
 
                                     // 해당 피어 없을 때만 생성
                                     CustomPeerConnection customPeerConnection = getCustomPeerConnection(userModel.clientId, Common.VIDEO);
@@ -1686,20 +1807,20 @@ public class MeetingRoomActivity extends AppCompatActivity {
                              *
                              * initiator 만 생성한다.
                              */
-                            if(initiator.equals(socketId)){
+                            if (initiator.equals(socketId)) {
                                 // shareId 없으면 제외
-                                if("".equals(shareId)) return;
+                                if ("".equals(shareId)) return;
 
                                 // 화면 공유자 제외
-                                if(shareId.equals(socketId)) return;
+                                if (shareId.equals(socketId)) return;
 
                                 // 이미 surfaceView 있으면 제외
                                 ProxySink proxyScreenSinks = getProxySink(shareId, Common.SCREEN);
-                                if(proxyScreenSinks != null) return;
+                                if (proxyScreenSinks != null) return;
 
                                 // 이미 화면 peer 가 존재 한다면 제외
                                 CustomPeerConnection customPeerConnection = getCustomPeerConnection(shareId, Common.SCREEN);
-                                if(customPeerConnection != null) return;
+                                if (customPeerConnection != null) return;
 
                                 createPeerAndDoOffer(shareId, Common.SCREEN);
                             }
@@ -1730,14 +1851,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
                          *
                          * => SenderId 가 ShareId 가 아니고 Socket.Id 가 ShareId 가 아니면 제외
                          */
-                        if(!"".equals(shareId) && Common.SCREEN.equals(peerType)) {
+                        if (!"".equals(shareId) && Common.SCREEN.equals(peerType)) {
 
                             // SenderId 가 ShareId 가 아니고 Socket.Id 가 ShareId 가 아니면 제외
-                            if(!senderId.equals(shareId) && !socketId.equals(shareId)) return;
+                            if (!senderId.equals(shareId) && !socketId.equals(shareId)) return;
 
                             // 이미 surfaceView 있으면 제외
                             ProxySink proxySink = getProxySink(shareId, peerType);
-                            if(proxySink != null) return;
+                            if (proxySink != null) return;
 
                             // 피어 생성 및 answer 작업
                             createPeerAndDoAnswer(senderId, peerType, message.getString("sdp"));
@@ -1796,19 +1917,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         /**
                          * [share 받음]
                          */
-                    } else if("share".equals(type)){
-                        if("".equals(shareStatus) || shareStatus == null) return;
+                    } else if ("share".equals(type)) {
+                        if ("".equals(shareStatus) || shareStatus == null) return;
 
-                        if("start".equals(shareStatus)){
+                        if ("start".equals(shareStatus)) {
                             // 스크린 공유 시작
                             screenSharingStart();
-                        }else if("stop".equals(shareStatus)){
+                        } else if ("stop".equals(shareStatus)) {
                             stopScreenCapture();
-                        }else if("ing".equals(shareStatus)){
+                        } else if ("ing".equals(shareStatus)) {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    Toast.makeText(MeetingRoomActivity.this, "이미 공유중입니다.",Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(MeetingRoomActivity.this, "이미 공유중입니다.", Toast.LENGTH_SHORT).show();
                                 }
                             });
                         }
@@ -1816,20 +1937,20 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         /**
                          * [whiteboard]
                          */
-                    } else if("whiteboard".equals(type)){
-                        if("".equals(whiteboardStatus) || whiteboardStatus == null) return;
+                    } else if ("whiteboard".equals(type)) {
+                        if ("".equals(whiteboardStatus) || whiteboardStatus == null) return;
 
-                        if("start".equals(whiteboardStatus)){
+                        if ("start".equals(whiteboardStatus)) {
                             // 화이트보드 공유 시작
                             startWhiteboard(whiteboardId);
-                        }else if("stop".equals(whiteboardStatus)){
+                        } else if ("stop".equals(whiteboardStatus)) {
                             // 화이트보드 공유 스탑
                             stopWhiteboard();
-                        }else if("ing".equals(whiteboardStatus)){
+                        } else if ("ing".equals(whiteboardStatus)) {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    Toast.makeText(MeetingRoomActivity.this, "이미 화이트보드가 존재합니다.",Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(MeetingRoomActivity.this, "이미 화이트보드가 존재합니다.", Toast.LENGTH_SHORT).show();
                                 }
                             });
                         }
@@ -1852,8 +1973,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     }
 
-    private void initDrawingView(ColorModel colorModel){
-        if(drawingView == null){
+    private void initDrawingView(ColorModel colorModel) {
+        if (drawingView == null) {
             /**
              * 화이트보드 SurfaceViewRenderer 생성
              */
@@ -1877,12 +1998,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     }
 
-    private void startWhiteboard(String whiteboardId){
-        if(whiteboardFragment != null) {
+    private void startWhiteboard(String whiteboardId) {
+        if (whiteboardFragment != null) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    if(drawingView == null){
+                    if (drawingView == null) {
                         drawingView = new DrawingView(MeetingRoomActivity.this, null, whiteboardFragment.getColorModel());
                         whiteboardBinding.whiteboardFrameLayout.addView(drawingView);
                     }
@@ -1892,7 +2013,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     }
 
-    private void stopWhiteboard(){
+    private void stopWhiteboard() {
         whiteboardId = null;
         runOnUiThread(new Runnable() {
             @Override
@@ -1904,7 +2025,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private void createPeerAndDoOffer(String clientId, String type){
+    private void createPeerAndDoOffer(String clientId, String type) {
         createPeerProcess(clientId, type, new CreateCustomPeerConnResult() {
             @Override
             public void onCreated(CustomPeerConnection customPeerConnection) {
@@ -1923,11 +2044,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private void createPeerAndDoAnswer(String clientId, String type, String sdp){
+    private void createPeerAndDoAnswer(String clientId, String type, String sdp) {
         createPeerProcess(clientId, type, new CreateCustomPeerConnResult() {
             @Override
             public void onCreated(CustomPeerConnection customPeerConnection) {
-                try{
+                try {
                     String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
 
                     // 원격 Description 설정
@@ -1956,7 +2077,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                     // Offer 세팅 및 보내기
                     doAnswer(customPeerConnection);
-                }catch (Exception e){
+                } catch (Exception e) {
                     e.printStackTrace();
                     Log.e(TAG, e.getMessage());
                 }
@@ -1971,7 +2092,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
 
-    private void createPeerProcess(String clientId, String type, CreateCustomPeerConnResult createCustomPeerConnResult){
+    private void createPeerProcess(String clientId, String type, CreateCustomPeerConnResult createCustomPeerConnResult) {
         // 원격 surfaceView 생성
         remoteSurfaceViewSetting(clientId, type, new CreateSurfaceViewRendererResult() {
             @Override
@@ -1993,29 +2114,30 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
 
-    private UserModel getUserModel(String clientId){
-        for (int i = 0; i < userList.size(); i++){
+    private UserModel getUserModel(String clientId) {
+        for (int i = 0; i < userList.size(); i++) {
             UserModel userModel = userList.get(i);
-            if(userModel.clientId.equals(clientId)){
+            if (userModel.clientId.equals(clientId)) {
                 return userModel;
             }
         }
         return null;
     }
 
-    private interface SwapResult{
+    private interface SwapResult {
         void onSuccess(SurfaceViewRenderer surfaceViewRenderer);
+
         void onError();
     }
 
-    private void exitPeer(String clientId){
+    private void exitPeer(String clientId) {
         Log.d(TAG, "[소켓 ID}:" + socketId);
 
         String tagVideoFlag = getTagFlagString(clientId, Common.VIDEO);
 
         // 일반 피어 닫기
         CustomPeerConnection customPeerConnection = getCustomPeerConnection(clientId, Common.VIDEO);
-        if(customPeerConnection != null) {
+        if (customPeerConnection != null) {
             customPeerConnection.getPeerConnection().close();
 
             Log.d(TAG, tagVideoFlag + "peerConnection close");
@@ -2025,7 +2147,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         // 화면 피어 닫기
         CustomPeerConnection customScreenPeerConnection = getCustomPeerConnection(clientId, Common.SCREEN);
-        if(customScreenPeerConnection != null) {
+        if (customScreenPeerConnection != null) {
             customScreenPeerConnection.getPeerConnection().close();
 
             Log.d(TAG, tagScreenFlag + "peerConnection close");
@@ -2033,18 +2155,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         // 해당 clientId와 일치 하는 모든 Peer를 제거한다.
         removeCustomPeerConn(clientId);
-        Log.d(TAG, "peerConnections:"+peerConnections);
+        Log.d(TAG, "peerConnections:" + peerConnections);
 
         // 해당 clientId와 일치 하는 모든 proxySink 제거
         List<ProxySink> proxySinkList = getProxySinkList(clientId);
-        for (int i = 0; i < proxySinkList.size(); i++){
+        for (int i = 0; i < proxySinkList.size(); i++) {
             ProxySink proxySink = proxySinkList.get(i);
             SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
             String type = proxySink.getType();
 
-            if(surfaceViewRenderer == peersBinding.mainSurfaceView){
+            if (surfaceViewRenderer == peersBinding.mainSurfaceView) {
                 // UI Thread에서 작업이 완료 되면 Callback 동작
-                exchangeSurfaceView(clientId, type, new SwapResult(){
+                exchangeSurfaceView(clientId, type, new SwapResult() {
                     /**
                      * @param pSurfaceViewRenderer : 클릭된 SurfaceView
                      */
@@ -2058,8 +2180,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         Log.d(TAG, "SurfaceView 교체 에러");
                     }
                 });
-            }else{
-                if(surfaceViewRenderer != null){
+            } else {
+                if (surfaceViewRenderer != null) {
                     removeSurfaceView(clientId);
                 }
             }
@@ -2067,11 +2189,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     }
 
-    private List<ProxySink> getProxySinkList(String clientId){
+    private List<ProxySink> getProxySinkList(String clientId) {
         List<ProxySink> result = new ArrayList<>();
-        for (int i = 0; i < proxySinks.size(); i++){
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
-            if(proxySink.getClientId().equals(clientId)){
+            if (proxySink.getClientId().equals(clientId)) {
                 result.add(proxySink);
             }
         }
@@ -2080,10 +2202,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 해당 clientId를 가진 모든 Peer를 제거한다.
-    private void removeCustomPeerConn(String clientId){
-        for (int i = peerConnections.size()-1; i >= 0; i--){
+    private void removeCustomPeerConn(String clientId) {
+        for (int i = peerConnections.size() - 1; i >= 0; i--) {
             CustomPeerConnection customPeerConnection = peerConnections.get(i);
-            if(customPeerConnection.getClientId().equals(clientId)){
+            if (customPeerConnection.getClientId().equals(clientId)) {
                 peerConnections.remove(i);
                 String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
                 Log.d(TAG, tagFlag + "peerConnections 에서 제거");
@@ -2091,11 +2213,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     }
 
-    private void stopScreenCapture(){
+    private void stopScreenCapture() {
         CustomCapturer customCapturer = getCustomVideoCapturer(Common.SCREEN);
 
         // 화면 캡처 중지
-        if(customCapturer != null){
+        if (customCapturer != null) {
             VideoCapturer screenCapturer = customCapturer.getVideoCapturer();
             try {
                 screenCapturer.stopCapture();
@@ -2108,9 +2230,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         // Screen 피어 닫기
         List<CustomPeerConnection> customPeerConnectionList = getCustomPeerConnectionFromType(Common.SCREEN);
-        for (int i = 0; i < customPeerConnectionList.size(); i++){
+        for (int i = 0; i < customPeerConnectionList.size(); i++) {
             CustomPeerConnection customPeerConnection = customPeerConnectionList.get(i);
-            if(customPeerConnection != null){
+            if (customPeerConnection != null) {
                 customPeerConnection.getPeerConnection().close();
                 String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
                 Log.d(TAG, tagFlag + "screenPeerConnection close");
@@ -2123,11 +2245,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         // 모든 Screen Proxy target 초기화
         ProxySink proxySink = getProxySinkFromType(Common.SCREEN);
 
-        if(proxySink != null){
+        if (proxySink != null) {
             SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
 
-            if(surfaceViewRenderer == peersBinding.mainSurfaceView){
-                exchangeSurfaceView(proxySink.getClientId(), proxySink.getType(), new SwapResult(){
+            if (surfaceViewRenderer == peersBinding.mainSurfaceView) {
+                exchangeSurfaceView(proxySink.getClientId(), proxySink.getType(), new SwapResult() {
                     /**
                      * @param pSurfaceViewRenderer : 클릭된 SurfaceView
                      */
@@ -2141,13 +2263,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         Log.d(TAG, "SurfaceView 교체 에러");
                     }
                 });
-            }else{
+            } else {
                 removeSurfaceView(proxySink.getClientId(), proxySink.getType());
             }
         }
 
         // 회의 바인드 서비스 해제
-        if(isMeetingServiceBound) {
+        if (isMeetingServiceBound) {
             unbindService(meetingServiceConn);
             Log.d(TAG, "미팅 서비스 언바운드");
             isMeetingServiceBound = false;
@@ -2160,7 +2282,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 메인이 아닌 다른 SurfaceView 와 교체 후, 해당 SurfaceView를 삭제
-    private void exchangeSurfaceView(String clientId, String type, SwapResult swapResult){
+    private void exchangeSurfaceView(String clientId, String type, SwapResult swapResult) {
         String tagFlag = getTagFlagString(clientId, type);
 
         Log.d(TAG, tagFlag + "해당 피어가 갖고 있는 SurfaceView 는 메인 View 입니다.");
@@ -2168,14 +2290,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         // 메인 view의 clientId가 아닌 ProxySink를 가져온다.
         ProxySink anotherProxySink = getAnotherProxySink(clientId);
-        Log.d(TAG, "[peer:"+anotherProxySink.getClientId()+"] <=> [peer:" + clientId + "] SurfaceView 교체");
+        Log.d(TAG, "[peer:" + anotherProxySink.getClientId() + "] <=> [peer:" + clientId + "] SurfaceView 교체");
 
         /**
          * 프록시 교환
          * ui thread에서 동작 합니다.
          */
         SurfaceViewRenderer anotherSurfaceViewRenderer = (SurfaceViewRenderer) anotherProxySink.getTarget();
-        setSwappedFeeds(anotherSurfaceViewRenderer, new SwapResult(){
+        setSwappedFeeds(anotherSurfaceViewRenderer, new SwapResult() {
             /**
              * @param surfaceViewRenderer : 클릭된 SurfaceView
              */
@@ -2191,17 +2313,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private void removeSurfaceView(String targetId){
+    private void removeSurfaceView(String targetId) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                for (int i = 0; i < proxySinks.size(); i++){
+                for (int i = 0; i < proxySinks.size(); i++) {
                     ProxySink proxySink = proxySinks.get(i);
                     SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
                     String type = proxySink.getType();
                     String tagFlag = getTagFlagString(proxySink.getClientId(), type);
 
-                    if(proxySink.getClientId().equals(targetId)){
+                    if (proxySink.getClientId().equals(targetId)) {
                         // 레이아웃에서 제거
                         peersBinding.layout.removeView(surfaceViewRenderer);
                         Log.d(TAG, tagFlag + "surfaceView 레이아웃에서 제거");
@@ -2215,16 +2337,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private void removeSurfaceView(String targetId, String type){
+    private void removeSurfaceView(String targetId, String type) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                for (int i = 0; i < proxySinks.size(); i++){
+                for (int i = 0; i < proxySinks.size(); i++) {
                     ProxySink proxySink = proxySinks.get(i);
                     SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
                     String tagFlag = getTagFlagString(proxySink.getClientId(), type);
 
-                    if(proxySink.getClientId().equals(targetId) && proxySink.getType().equals(type)){
+                    if (proxySink.getClientId().equals(targetId) && proxySink.getType().equals(type)) {
                         // 레이아웃에서 제거
                         peersBinding.layout.removeView(surfaceViewRenderer);
                         Log.d(TAG, tagFlag + "surfaceView 레이아웃에서 제거");
@@ -2238,21 +2360,21 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private ProxySink getAnotherProxySink(String clientId){
+    private ProxySink getAnotherProxySink(String clientId) {
 
-        for (int i = 0; i < proxySinks.size(); i++){
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
-            if(!clientId.equals(proxySink.getClientId())){
+            if (!clientId.equals(proxySink.getClientId())) {
                 return proxySink;
             }
         }
         return null;
     }
 
-    private void remoteSurfaceViewSetting(String clientId, String type, CreateSurfaceViewRendererResult createSurfaceViewRendererResult){
+    private void remoteSurfaceViewSetting(String clientId, String type, CreateSurfaceViewRendererResult createSurfaceViewRendererResult) {
 
         // 화면 공유자의 경우 화면 세팅을 하지 않는다.
-        if(Common.SCREEN.equals(type) && socketId.equals(shareId)) {
+        if (Common.SCREEN.equals(type) && socketId.equals(shareId)) {
             createSurfaceViewRendererResult.onSuccess();
             return;
         }
@@ -2283,6 +2405,22 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
                 surfaceViewRenderer.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
 
+                surfaceViewRenderer.getHolder().addCallback(new SurfaceHolder.Callback() {
+                    @Override
+                    public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+                        Log.d(TAG, tagFlag + "surfaceCreated");
+                    }
+
+                    @Override
+                    public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+                    }
+
+                    @Override
+                    public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+                        Log.d(TAG, tagFlag + "surfaceDestroyed");
+                    }
+                });
+
                 // 클릭 이벤트 추가
                 surfaceViewRenderer.setOnClickListener(new View.OnClickListener() {
                     @Override
@@ -2301,13 +2439,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 layout.addView(surfaceViewRenderer);
 
                 proxySinks.add(proxySink);
-                Log.d(TAG, "proxyVideoSinks:"+ proxySinks);
+                Log.d(TAG, "proxyVideoSinks:" + proxySinks);
 
                 /**
                  * 화면 SurfaceViewRenderer가 main이 아니라면 교체 한다.
                  */
-                if(Common.SCREEN.equals(type)){
-                    if(surfaceViewRenderer != peersBinding.mainSurfaceView){
+                if (Common.SCREEN.equals(type)) {
+                    if (surfaceViewRenderer != peersBinding.mainSurfaceView) {
                         Log.d(TAG, tagFlag + "메인 위치의 SurfaceView 와 스왑 합니다.");
                         setSwappedFeeds(surfaceViewRenderer, new SwapResult() {
                             @Override
@@ -2361,24 +2499,24 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 // 현재 메인 SurfaceView에 어떤 clientId가 매핑 되어져 있는지 가져오기
                 ProxySink mainProxySink = getMainProxyVideoSink();
                 SurfaceViewRenderer mainTarget = (SurfaceViewRenderer) mainProxySink.getTarget();
-                if(mainTarget == null) return;
+                if (mainTarget == null) return;
 
                 // 교환
                 mainProxySink.setTarget(clickedTarget);
                 clickedProxySink.setTarget(mainTarget);
 
-                if(swapResult != null) swapResult.onSuccess(clickedTarget);
+                if (swapResult != null) swapResult.onSuccess(clickedTarget);
             }
         });
     }
 
     // SurfaceView 와 연동된 VideoSink 를 가져온다.
-    private ProxySink getVideoSinkFromSurfaceView(SurfaceViewRenderer pSurfaceViewRenderer){
+    private ProxySink getVideoSinkFromSurfaceView(SurfaceViewRenderer pSurfaceViewRenderer) {
         // 먼저 비디오 싱크에서 찾는다
-        for (int i = 0; i < proxySinks.size(); i++){
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
             SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
-            if(surfaceViewRenderer.equals(pSurfaceViewRenderer)){
+            if (surfaceViewRenderer.equals(pSurfaceViewRenderer)) {
                 return proxySink;
             }
         }
@@ -2487,7 +2625,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         peersBinding.mainSurfaceView.setMirror(false);
 
         int width = peersBinding.mainSurfaceView.getWidth();
-        Log.d(TAG, "width:"+width);
+        Log.d(TAG, "width:" + width);
         peersBinding.mainSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
@@ -2572,8 +2710,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
          * [화면 공유용]
          * 화면 공유를 시작한 사람만 비디오 스트림을 시작 합니다.
          */
-        if(customPeerConnection.getType().equals(Common.SCREEN)){
-            if(!shareId.equals(socketId)) return;
+        if (customPeerConnection.getType().equals(Common.SCREEN)) {
+            if (!shareId.equals(socketId)) return;
         }
 
         MediaStream mediaStream = factory.createLocalMediaStream("ARDAMS");
@@ -2581,28 +2719,29 @@ public class MeetingRoomActivity extends AppCompatActivity {
         VideoTrack localVideoTrack = getCustomTrack(type).getVideoTrack();
         AudioTrack localAudioTrack = getCustomTrack(type).getAudioTrack();
 
-        if(localVideoTrack != null) mediaStream.addTrack(localVideoTrack);
-        if(localAudioTrack != null) mediaStream.addTrack(localAudioTrack);
-
+        if (localVideoTrack != null) mediaStream.addTrack(localVideoTrack);
+        if (localAudioTrack != null) mediaStream.addTrack(localAudioTrack);
 
 
         peerConnection.addStream(mediaStream);
         Log.d(TAG, tagFlag + "해당 피어에 로컬 stream 연동 완료");
     }
 
-    interface CreateSurfaceViewRendererResult{
+    interface CreateSurfaceViewRendererResult {
         void onSuccess();
+
         void onError();
     }
 
-    private interface CreateCustomPeerConnResult{
+    private interface CreateCustomPeerConnResult {
         void onCreated(CustomPeerConnection customPeerConnection);
+
         void onError(Exception e);
     }
 
     private CustomPeerConnection createPeerConnection(PeerConnectionFactory factory, String clientId, String type, CreateCustomPeerConnResult createCustomPeerConnResult) {
         CustomPeerConnection customPeerConnection = null;
-        try{
+        try {
             String tagFlag = getTagFlagString(clientId, type);
 
             customPeerConnection = new CustomPeerConnection(factory, clientId, type, new CustomPeerConnection.Observer() {
@@ -2666,8 +2805,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                     VideoTrack remoteVideoTrack = mediaStream.videoTracks.size() != 0 ? mediaStream.videoTracks.get(0) : null;
                     AudioTrack remoteAudioTrack = mediaStream.audioTracks.size() != 0 ? mediaStream.audioTracks.get(0) : null;
-                    if(remoteAudioTrack != null) remoteAudioTrack.setEnabled(true);
-                    if(remoteVideoTrack != null) remoteVideoTrack.setEnabled(true);
+                    if (remoteAudioTrack != null) remoteAudioTrack.setEnabled(true);
+                    if (remoteVideoTrack != null) remoteVideoTrack.setEnabled(true);
 
                     bindTrackAndView(clientId, type, null, remoteVideoTrack);
                 }
@@ -2693,14 +2832,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         public void onStateChange() {
                             Log.d(TAG, "Data channel state changed: " + dc.label() + ": " + dc.state());
 
-                            if(dc.state() == DataChannel.State.OPEN){
+                            if (dc.state() == DataChannel.State.OPEN) {
                                 // 화이트 보드 공유중이라면, 해당 프레그먼트를 활성화 시키고, 이미지 요청을 한다.
-                                if(!"".equals(whiteboardId) && whiteboardId != null ){
+                                if (!"".equals(whiteboardId) && whiteboardId != null) {
                                     replaceFragment(whiteboardFragment);
 
-                                    if(whiteboardId.equals(clientId)){
+                                    if (whiteboardId.equals(clientId)) {
                                         CustomPeerConnection whiteBoardHostPeer = getCustomPeerConnection(whiteboardId, Common.VIDEO);
-                                        if(whiteBoardHostPeer != null){
+                                        if (whiteBoardHostPeer != null) {
                                             Log.d(TAG, "img_req 요청!");
                                             String cmd = "img_req";
                                             ByteBuffer buffer = ByteBuffer.wrap(cmd.getBytes());
@@ -2752,19 +2891,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
                              */
                             String cmd = splitData[0];
 
-                            if("draw".equals(cmd)){
+                            if ("draw".equals(cmd)) {
                                 float x = Float.parseFloat(splitData[1]);
                                 float y = Float.parseFloat(splitData[2]);
 
                                 ColorType colorType = ColorType.valueOf(splitData[3]);
                                 Integer motion = Integer.parseInt(splitData[4]);
 
-                                Log.d(TAG, "x:" + x + ", y:" + y + ", colorType:" + colorType +  ", motion:" + motion);
+                                Log.d(TAG, "x:" + x + ", y:" + y + ", colorType:" + colorType + ", motion:" + motion);
 
                                 MeetingRoomActivity.this.drawingView.fireDraw(x, y, colorType, clientId, motion);
-                            }else if("img_req".equals(cmd)){
+                            } else if ("img_req".equals(cmd)) {
                                 Log.d(TAG, "img_req 요청을 받았다.");
-                                if(drawingView != null){
+                                if (drawingView != null) {
                                     Bitmap bitmap = getViewBitmap(drawingView);
 //                                    Log.d(TAG, "bitmap:" + bitmap);
                                     byte[] bitmapData = Common.bitmapToByteArray(bitmap);
@@ -2774,17 +2913,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                     CustomPeerConnection customPeerConnection = getCustomPeerConnection(clientId, Common.VIDEO);
                                     customPeerConnection.getDataChannel().send(new DataChannel.Buffer(bitmapByteBuffer, true));
                                 }
-                            /**
-                             * 데이터 채널에서 채팅으로 통신할 때
-                             * cmd;type;msg
-                             */
-                            }else if("chat".equals(cmd)){
+                                /**
+                                 * 데이터 채널에서 채팅으로 통신할 때
+                                 * cmd;type;msg
+                                 */
+                            } else if ("chat".equals(cmd)) {
                                 String type = splitData[1];
                                 String msg = splitData[2];
                                 String date = splitData[3];
                                 UserModel userModel = getUserModel(clientId);
 
-                                if("txt".equals(type)){
+                                if ("txt".equals(type)) {
 
                                     MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, msg, null, userModel, date);
                                     // 메시지 추가
@@ -2801,8 +2940,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                             messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
                                         }
                                     });
-                                }else if("img".equals(type)){
+                                } else if ("img".equals(type)) {
+                                    Log.d(TAG, "[데이터 채널] 이미지 받음");
                                     String imagePath = msg;
+
+                                    Log.d(TAG, "imagePath:" + imagePath);
+
                                     MessageModel messageModel = new MessageModel(MessageModel.MessageType.RECEIVE, null, imagePath, userModel, date);
                                     // 메시지 추가
                                     chatList.add(messageModel);
@@ -2812,10 +2955,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
+                                            Log.d(TAG, "addIdx:" + addIdx);
+                                            Log.d(TAG, "notifyItemInserted 동작");
+
                                             // 리사이클러뷰 새롭게 인지
-                                            messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
+                                            messageRecyclerView.getAdapter().notifyDataSetChanged();
                                             // 스크롤 제일 아래로
-//                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                                            messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
                                         }
                                     });
                                 }
@@ -2836,18 +2982,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 }
             });
             createCustomPeerConnResult.onCreated(customPeerConnection);
-        }catch (Exception e){
+        } catch (Exception e) {
             createCustomPeerConnResult.onError(e);
         }
 
         return customPeerConnection;
     }
 
-    private ProxySink getMainProxyVideoSink(){
-        for (int i = 0; i < proxySinks.size(); i++){
+    private ProxySink getMainProxyVideoSink() {
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
             SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
-            if(surfaceViewRenderer == peersBinding.mainSurfaceView){
+            if (surfaceViewRenderer == peersBinding.mainSurfaceView) {
                 return proxySink;
             }
         }
@@ -2856,11 +3002,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 같은 타입의 CustomVideoCapturer를 가져온다.
-    private CustomCapturer getCustomVideoCapturer(String type){
-        for (int i = 0; i < capturerList.size(); i++){
+    private CustomCapturer getCustomVideoCapturer(String type) {
+        for (int i = 0; i < capturerList.size(); i++) {
             CustomCapturer customCapturer = capturerList.get(i);
             // 타입이 같을 경우
-            if(customCapturer.getType().equals(type)){
+            if (customCapturer.getType().equals(type)) {
                 return customCapturer;
             }
         }
@@ -2868,11 +3014,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 같은 타입의 CustomVideoTrack를 가져온다.
-    private CustomTrack getCustomTrack(String type){
-        for (int i = 0; i < trackList.size(); i++){
+    private CustomTrack getCustomTrack(String type) {
+        for (int i = 0; i < trackList.size(); i++) {
             CustomTrack customTrack = trackList.get(i);
             // 타입이 같을 경우
-            if(customTrack.getType().equals(type)){
+            if (customTrack.getType().equals(type)) {
                 return customTrack;
             }
         }
@@ -2880,12 +3026,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 특정 clientId, type 에 맞는 CustomPeerConnection을 가져온다.
-    private CustomPeerConnection getCustomPeerConnection(String clientId, String type){
-        for (int i = 0; i < peerConnections.size(); i++){
+    private CustomPeerConnection getCustomPeerConnection(String clientId, String type) {
+        for (int i = 0; i < peerConnections.size(); i++) {
             CustomPeerConnection customPeerConnection = peerConnections.get(i);
             // 타입이 같을 경우
-            if(customPeerConnection.getType().equals(type)
-                    && customPeerConnection.getClientId().equals(clientId)){
+            if (customPeerConnection.getType().equals(type)
+                    && customPeerConnection.getClientId().equals(clientId)) {
                 return customPeerConnection;
             }
         }
@@ -2893,13 +3039,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 특정 clientId, type 에 맞는 CustomPeerConnection을 가져온다.
-    private List<CustomPeerConnection> getCustomPeerConnectionFromType(String type){
+    private List<CustomPeerConnection> getCustomPeerConnectionFromType(String type) {
         List<CustomPeerConnection> result = new ArrayList<>();
 
-        for (int i = 0; i < peerConnections.size(); i++){
+        for (int i = 0; i < peerConnections.size(); i++) {
             CustomPeerConnection customPeerConnection = peerConnections.get(i);
             // 타입이 같을 경우
-            if(customPeerConnection.getType().equals(type)){
+            if (customPeerConnection.getType().equals(type)) {
                 result.add(customPeerConnection);
             }
         }
@@ -2907,23 +3053,23 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 특정 clientId, type 에 맞는 ProxyVideoSink 을 가져온다.
-    private ProxySink getProxySink(String clientId, String type){
-        for (int i = 0; i < proxySinks.size(); i++){
+    private ProxySink getProxySink(String clientId, String type) {
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
             // 타입이 같을 경우
-            if(proxySink.getType().equals(type)
-                    && proxySink.getClientId().equals(clientId)){
+            if (proxySink.getType().equals(type)
+                    && proxySink.getClientId().equals(clientId)) {
                 return proxySink;
             }
         }
         return null;
     }
 
-    private ProxySink getProxySinkFromType(String type){
-        for (int i = 0; i < proxySinks.size(); i++){
+    private ProxySink getProxySinkFromType(String type) {
+        for (int i = 0; i < proxySinks.size(); i++) {
             ProxySink proxySink = proxySinks.get(i);
             // 타입이 같을 경우
-            if(proxySink.getType().equals(type)){
+            if (proxySink.getType().equals(type)) {
                 return proxySink;
             }
         }
@@ -2931,45 +3077,45 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     // 특정 clientId, type 에 맞는 CustomQueue 을 가져온다.
-    private CustomQueue getCustomQueue(String clientId, String type){
-        for (int i = 0; i < queueList.size(); i++){
+    private CustomQueue getCustomQueue(String clientId, String type) {
+        for (int i = 0; i < queueList.size(); i++) {
             CustomQueue customQueue = queueList.get(i);
             // 타입이 같을 경우
-            if(customQueue.getType().equals(type)
-                    && customQueue.getClientId().equals(clientId)){
+            if (customQueue.getType().equals(type)
+                    && customQueue.getClientId().equals(clientId)) {
                 return customQueue;
             }
         }
         return null;
     }
 
-    private String getTypeTag(String type){
+    private String getTypeTag(String type) {
         return "[" + type + "]";
     }
 
     // 특정 타입 disconnect
-    private void disconnectSpecificType(String type){
-        try{
+    private void disconnectSpecificType(String type) {
+        try {
             String typeTag = getTypeTag(type);
 
             // 캡처러 중지
-            for (int i = capturerList.size()-1; i >= 0; i--){
+            for (int i = capturerList.size() - 1; i >= 0; i--) {
                 CustomCapturer customCapturer = capturerList.get(i);
 
                 // 특정 타입의 캡처러만 중지 시킨다.
-                if(type.equals(customCapturer.getType())){
+                if (type.equals(customCapturer.getType())) {
                     customCapturer.getVideoCapturer().stopCapture();
                     Log.d(TAG, typeTag + "비디오 캡처 중지");
                 }
             }
 
             // 해당 type peer close 및 초기화
-            for (int i = peerConnections.size()-1; i >= 0; i--){
+            for (int i = peerConnections.size() - 1; i >= 0; i--) {
                 CustomPeerConnection customPeerConnection = peerConnections.get(i);
                 String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
 
                 // 특정 type의 CustomPeerConnection만 close
-                if(type.equals(customPeerConnection.getType())){
+                if (type.equals(customPeerConnection.getType())) {
                     customPeerConnection.getPeerConnection().close();
                     Log.d(TAG, tagFlag + "피어 닫기");
 
@@ -2982,12 +3128,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
 
             // 특정 CustomProxyVideoSink 초기화 및 해제
-            for (int i = proxySinks.size()-1; i >= 0; i--){
+            for (int i = proxySinks.size() - 1; i >= 0; i--) {
                 ProxySink proxySink = proxySinks.get(i);
                 String tagFlag = getTagFlagString(proxySink.getType(), proxySink.getClientId());
 
                 // 특정 type의 ProxyVideoSink의 target을 없앤다.
-                if(type.equals(proxySink.getType())){
+                if (type.equals(proxySink.getType())) {
                     proxySink.setTarget(null);
                     Log.d(TAG, tagFlag + "proxyVideoSink 의 target 초기화");
 
@@ -2996,7 +3142,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 }
             }
 
-        }catch (Exception e){
+        } catch (Exception e) {
             Log.e(TAG, e.getMessage());
             e.printStackTrace();
         }
@@ -3005,7 +3151,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private void disconnect() {
         try {
             // 해당 소켓이 나갔다는 사실을 알린다.
-            if(socket != null){
+            if (socket != null) {
                 socket.emit("bye");
                 Log.d(TAG, "bye 라고 소켓에 알리기");
             }
@@ -3027,7 +3173,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //            localProxyVideoSink.setTarget(null);
 
             // 회의 바인드 서비스 해제
-            if(isMeetingServiceBound) {
+            if (isMeetingServiceBound) {
                 unbindService(meetingServiceConn);
                 Log.d(TAG, "미팅 서비스 언바운드");
             }
@@ -3046,22 +3192,22 @@ public class MeetingRoomActivity extends AppCompatActivity {
         return drawingView;
     }
 
-    public interface FaceListener{
+    public interface FaceListener {
         void onSuccess(Bitmap bitmap);
     }
 
-    public float calDistance(PointF point1, PointF point2){
+    public float calDistance(PointF point1, PointF point2) {
         return (float) Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
     }
 
     // 비트맵을 파일로 변환하는 메소드
-    public File saveBitmapToPng(Bitmap bitmap, Context context) {
+    public File saveBitmapToJpeg(Bitmap bitmap, Context context) {
 
         //내부저장소 캐시 경로를 받아옵니다.
         File storage = context.getCacheDir();
 
         //저장할 파일 이름
-        String fileName = String.valueOf(System.currentTimeMillis()) + ".png";
+        String fileName = String.valueOf(System.currentTimeMillis()) + ".jpg";
 
         //storage 에 파일 인스턴스를 생성합니다.
         File imgFile = new File(storage, fileName);
@@ -3075,7 +3221,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
             FileOutputStream out = new FileOutputStream(imgFile);
 
             // compress 함수를 사용해 스트림에 비트맵을 저장합니다.
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
+            bitmap.recycle();
 
             // 스트림 사용후 닫아줍니다.
             out.close();
@@ -3083,11 +3230,78 @@ public class MeetingRoomActivity extends AppCompatActivity {
             return imgFile;
 
         } catch (FileNotFoundException e) {
-            Log.e("MyTag","FileNotFoundException : " + e.getMessage());
+            Log.e("MyTag", "FileNotFoundException : " + e.getMessage());
         } catch (IOException e) {
-            Log.e("MyTag","IOException : " + e.getMessage());
+            Log.e("MyTag", "IOException : " + e.getMessage());
         }
 
         return imgFile;
+    }
+
+    int MAX_HEIGHT = 500;
+    int MAX_WIDTH = 500;
+
+    // 리샘플링 값 계산 : 타겟 너비와 높이를 기준으로 2의 거듭제곱인 샘플 크기 값을 계산
+    private Bitmap resizeBitmapImage(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int inSampleSize = 1;
+
+        int halfHeight = 0;
+        int halfWidth = 0;
+        if (height > MAX_HEIGHT || width > MAX_WIDTH) {
+            halfHeight = height / 2;
+            halfWidth = width / 2;
+
+            while (halfHeight / inSampleSize >= MAX_HEIGHT && halfWidth / inSampleSize >= MAX_WIDTH) {
+                inSampleSize *= 2;
+            }
+        }
+
+        return Bitmap.createScaledBitmap(bitmap, halfWidth / inSampleSize, halfHeight / inSampleSize, true);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d(TAG, "onStart 동작");
+        if(peersBinding != null){
+            Log.d(TAG, "peersBinding.mainSurfaceView:" + peersBinding.mainSurfaceView);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        Log.d(TAG, "onStop 동작");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "onPause 동작");
+
+        for(int i=0; i<trackList.size(); i++){
+            CustomTrack customTrack = trackList.get(i);
+            if(customTrack.getType().equals(VIDEO)){
+                customTrack.getVideoTrack().setEnabled(false);
+                Log.d(TAG, "비디오 트랙 비활성화");
+                break;
+            }
+        }
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+
+        for(int i=0; i<trackList.size(); i++){
+            CustomTrack customTrack = trackList.get(i);
+            if(customTrack.getType().equals(VIDEO)){
+                customTrack.getVideoTrack().setEnabled(true);
+                Log.d(TAG, "비디오 트랙 비활성화");
+                break;
+            }
+        }
     }
 }

@@ -40,4 +40,5 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
         super.init(sharedContext, rendererEvents, configAttributes, drawer);
         this.eglRenderer.init(sharedContext, this, configAttributes, drawer);
     }
+
 }

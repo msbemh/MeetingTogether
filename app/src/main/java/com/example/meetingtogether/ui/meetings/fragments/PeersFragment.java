@@ -1,6 +1,6 @@
 package com.example.meetingtogether.ui.meetings.fragments;
 
-import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
+import static com.example.meetingtogether.ui.meetings.MeetingRoomActivity.TAG;
 
 import android.os.Bundle;
 import android.util.Log;
@@ -22,6 +22,7 @@ public class PeersFragment extends Fragment {
     }
 
     public static PeersFragment newInstance(CreateResultInterface createResultInterface) {
+        Log.d(TAG, "[PeerFragment] newInstance");
         PeersFragment fragment = new PeersFragment(createResultInterface);
         return fragment;
     }
@@ -29,12 +30,13 @@ public class PeersFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        Log.d(TAG, "[PeerFragment] onCreate");
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentPeersBinding.inflate(inflater, container, false);
+        Log.d(TAG, "[PeerFragment] onCreateView");
 
         try{
             this.createResultInterface.onCreated(binding);
@@ -51,14 +53,26 @@ public class PeersFragment extends Fragment {
     }
 
     @Override
+    public void onStop() {
+        super.onStop();
+        Log.d(TAG, "[PeerFragment] onStop");
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        Log.d(TAG, "[PeerFragment] onPause");
+    }
+
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
-        Log.d(TAG, "onDestroyView");
+        Log.d(TAG, "[PeerFragment] onDestroyView");
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy");
+        Log.d(TAG, "[PeerFragment] onDestroy");
     }
 }

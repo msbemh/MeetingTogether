@@ -13,6 +13,7 @@
         android:text="오전 3:39"
         android:textColor="@color/black"
         android:textSize="10sp"
+        android:layout_marginEnd="5dp"
         app:layout_constraintBottom_toBottomOf="@+id/msgContent"
         app:layout_constraintEnd_toStartOf="@+id/msgContent" />
 
@@ -31,6 +32,17 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <TextView
+        android:id="@+id/send_img_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="오전 3:39"
+        android:textColor="@color/black"
+        android:textSize="10sp"
+        android:layout_marginEnd="5dp"
+        app:layout_constraintBottom_toBottomOf="@+id/msgImage"
+        app:layout_constraintEnd_toStartOf="@+id/msgImage" />
+
     <ImageView
         android:id="@+id/msgImage"
         android:layout_width="wrap_content"
@@ -39,6 +51,7 @@
         android:layout_marginTop="16dp"
         android:layout_marginEnd="5dp"
         android:scaleType="centerCrop"
+        android:background="@color/yellow"
         android:maxWidth="200dp"
         android:padding="10dp"
         app:layout_constraintEnd_toEndOf="parent"

@@ -12,6 +12,10 @@ import retrofit2.http.Part;
 public interface RetrofitInterface {
     @Multipart
     @POST("profile")
+    Call<RetrofitResponse> postProfile(@Part MultipartBody.Part image);
+
+    @Multipart
+    @POST("photo")
     Call<RetrofitResponse> postImage(@Part MultipartBody.Part image);
 
     @Multipart

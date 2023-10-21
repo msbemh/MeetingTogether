@@ -58,7 +58,7 @@ public class CustomCapturer {
 
                     @Override
                     public void onCameraFreezed(String s) {
-                        Log.d(TAG, "[onCameraDisconnected]:" + s);
+                        Log.d(TAG, "[onCameraFreezed]:" + s);
                     }
 
                     @Override
@@ -99,7 +99,7 @@ public class CustomCapturer {
 
                     @Override
                     public void onCameraFreezed(String s) {
-                        Log.d(TAG, "[onCameraDisconnected]:" + s);
+                        Log.d(TAG, "[onCameraFreezed]:" + s);
                     }
 
                     @Override

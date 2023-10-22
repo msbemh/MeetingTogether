@@ -23,9 +23,11 @@ import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.PixelFormat;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.NinePatchDrawable;
@@ -64,9 +66,13 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
@@ -162,6 +168,7 @@ import com.example.meetingtogether.retrofit.FileInfo;
 import com.example.meetingtogether.retrofit.RetrofitInterface;
 import com.example.meetingtogether.retrofit.RetrofitResponse;
 import com.example.meetingtogether.services.MeetingService;
+import com.example.meetingtogether.services.TestService;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment;
@@ -205,6 +212,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
     // 소켓 Id
     private String socketId;
 
+
+
     // 로컬 오디오 트랙
 //    private AudioTrack localAudioTrack;
 //    private ProxyVideoSink localProxyVideoSink = new ProxyVideoSink();
@@ -213,6 +222,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public static List<CustomPeerConnection> peerConnections = new ArrayList<>();
     private List<ProxySink> proxySinks = new ArrayList<>();
     private List<CustomQueue> queueList = new ArrayList<>();
+
+    private ViewGroup viewGroup;
 
     private Handler handler;
     private Handler chatHandler;
@@ -235,9 +246,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     // 미팅 서비스 바운드 여부
     private boolean isMeetingServiceBound = false;
+    private boolean isTestServiceBound = false;
 
     // 미팅 서비스
     public static MeetingService meetingService;
+    public static TestService testService;
 
     // 미디어 프로젝션 토큰요청 결과 코드
     private int mediaProjectionResultCode;
@@ -339,14 +352,294 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
             // 모든 권한에 동의
             if (areAllGranted) {
+                // 테스트 서비스 바인드 시작
+                Intent intent = new Intent(MeetingRoomActivity.this, TestService.class);
+                bindService(intent, testServiceConn, Context.BIND_AUTO_CREATE);
+
+                // 프래그먼트들 세팅
+                fragmentsSetting();
                 // 시그널링 서버와 연결
                 connectToSignallingServer();
-                // 모든 권한에 동의 하지 않음
+            // 모든 권한에 동의 하지 않음
             } else {
                 showPermissionDialog();
             }
         }
     });
+
+    private void fragmentsSetting(){
+        /**
+         * 프레그 먼트 세팅
+         */
+        peersFragment = PeersFragment.newInstance(new PeersFragment.CreateResultInterface() {
+            @Override
+            public void onCreated(FragmentPeersBinding peersBinding) {
+                MeetingRoomActivity.this.peersBinding = peersBinding;
+
+                viewGroup = (ViewGroup) peersBinding.mainSurfaceView.getParent();
+
+                // 로컬 세팅 시작
+                localSetting();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                e.printStackTrace();
+                Log.e(TAG, e.getMessage());
+            }
+        });
+
+        /** 화이트 보드 프레그먼트 생성 */
+        whiteboardFragment = WhiteboardFragment.newInstance(new WhiteboardFragment.CreateResultInterface() {
+            @Override
+            public void onCreated(FragmentWhiteboardBinding whiteboardBinding, ColorModel colorModel) {
+                MeetingRoomActivity.this.whiteboardBinding = whiteboardBinding;
+                MeetingRoomActivity.this.initDrawingView(colorModel);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                e.printStackTrace();
+                Log.e(TAG, e.getMessage());
+            }
+        });
+
+        /** 채팅 프레그먼트 */
+        meetingRoomChatFragment = MeetingRoomChatFragment.newInstance(new MeetingRoomChatFragment.CreateResultInterface() {
+            @Override
+            public void onCreated(FragmentMeetingRoomChatBinding binding) {
+                meetingRoomChatBinding = binding;
+
+                // 메시지 보내기
+                meetingRoomChatBinding.chatSendbutton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        // 메시지 추출
+                        String msg = meetingRoomChatBinding.messageText.getText().toString();
+                        UserModel userModel = getUserModel(socketId);
+
+                        String date = getCurrentLocalDateTime();
+                        // 메시지 추가
+                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, msg, null, userModel, date));
+
+                        // 리사이클러뷰 인지시키기
+                        int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
+
+                        // 에디터 초기화
+                        meetingRoomChatBinding.messageText.setText("");
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                // 리사이클러뷰 새롭게 인지
+                                messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
+                                // 스크롤 제일 아래로
+                                messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
+                            }
+                        });
+
+                        // 연결된 피어 모두애게 그리기 정보를 보낸다.
+                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
+                            CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+                            DataChannel dataChannel = customPeerConnection.getDataChannel();
+                            String cmd = "chat";
+                            String type = "txt";
+                            String data = cmd + ";" + type + ";" + msg + ";" + date;
+                            ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
+                            dataChannel.send(new DataChannel.Buffer(buffer, false));
+                        }
+                    }
+                });
+
+                // 이미지 보내기
+                meetingRoomChatBinding.imageAddButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        Intent intent = new Intent(Intent.ACTION_PICK);
+                        intent.setType(MediaStore.Images.Media.CONTENT_TYPE);
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);  // 1개 이미지를 가져올 수 있도록 세팅
+                        intent.setData(MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                        activityAlbumResultLauncher.launch(intent);
+                    }
+                });
+
+                // 리사이클러뷰
+                RecyclerView meetingRoomChatRecyclerView = meetingRoomChatBinding.meetingRoomChatRecyclerView;
+
+                // 리사이클러뷰 바인드
+                messageRecyclerView = new MessageRecyclerView(new MessageRecyclerView.OnBind() {
+                    // TODO: ViewBind 변경
+                    // ViewBind 연동
+                    @Override
+                    public void onBindViewListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType) {
+                        Log.d(TAG, "viewHolder:" + viewHolder);
+                        Log.d(TAG, "view:" + view);
+                        if (viewType == MessageModel.MessageType.RECEIVE.getValue()) {
+                            viewHolder.setReceiveBinding(ReceiveMessageRowItemBinding.bind(view));
+                        } else {
+                            viewHolder.setSendBinding(SendMessageRowItemBinding.bind(view));
+                        }
+                    }
+
+                    // TODO: ViewBind 변경
+                    // 실제 View 와 데이터 연동
+                    @Override
+                    public void onBindViewHolderListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
+                        Log.d(TAG, "[onBindViewHolderListener] 동작");
+                        Log.d(TAG, "[position:" + position);
+
+                        MessageModel messageModel = chatList.get(position);
+
+                        Log.d(TAG, "messageModel:" + messageModel);
+
+                        // 받은 메시지
+                        if (chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()) {
+                            ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding) (holder.receiveBinding);
+                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
+                            String filename = messageModel.getFilename();
+
+                            Log.d(TAG, "filename:" + filename);
+
+                            if (filename != null) {
+                                binding.msgContent.setVisibility(View.GONE);
+                                binding.receiveDate.setVisibility(View.GONE);
+
+                                binding.msgImage.setVisibility(View.VISIBLE);
+                                binding.receiveImgDate.setVisibility(View.VISIBLE);
+
+                                binding.receiveImgDate.setText(messageModel.getDate());
+
+                                Log.d(TAG, "Glide 동작");
+                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
+                                Glide
+                                        .with(MeetingRoomActivity.this)
+                                        .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                        /** Glide는 원본 비율을 유지한다. */
+                                        .override(500,500)
+                                        .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                        .listener(new RequestListener<Drawable>() {
+                                            @Override
+                                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                                // 이미지 로딩에 실패했을 때 수행할 작업
+                                                return false;
+                                            }
+
+                                            @Override
+                                            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                                Log.d(TAG, "Glide 이미지 로드 완료");
+                                                return false;
+                                            }
+                                        })
+                                        .into(binding.msgImage);
+
+                            } else {
+                                binding.msgContent.setVisibility(View.VISIBLE);
+                                binding.receiveDate.setVisibility(View.VISIBLE);
+
+                                binding.msgImage.setVisibility(View.GONE);
+                                binding.receiveImgDate.setVisibility(View.GONE);
+
+                                binding.msgContent.setText(messageModel.getMsg());
+                                binding.receiveDate.setText(messageModel.getDate());
+                            }
+
+                            binding.name.setText(messageModel.getSender().getClientId());
+                            // 보낸 메시지
+                        } else {
+                            SendMessageRowItemBinding binding = (SendMessageRowItemBinding) (holder.sendBinding);
+
+                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
+                            String filename = messageModel.getFilename();
+                            if (filename != null) {
+                                binding.msgContent.setVisibility(View.GONE);
+                                binding.msgImage.setVisibility(View.VISIBLE);
+
+                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
+                                // 여기선 메시지 1개당 이미지 1개이기 때문에 항상 0 인덱스이다.
+                                Glide
+                                        .with(MeetingRoomActivity.this)
+                                        .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                        .override(500,500)
+                                        .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                        .listener(new RequestListener<Drawable>() {
+                                            @Override
+                                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                                // 이미지 로딩에 실패했을 때 수행할 작업
+                                                return false;
+                                            }
+
+                                            @Override
+                                            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                                return false;
+                                            }
+                                        })
+                                        .into(binding.msgImage);
+                            } else {
+                                binding.msgContent.setVisibility(View.VISIBLE);
+                                binding.msgImage.setVisibility(View.GONE);
+
+                                binding.msgContent.setText(messageModel.getMsg());
+                            }
+
+                            binding.sendDate.setText(messageModel.getDate());
+                            binding.sendImgDate.setText(messageModel.getDate());
+                        }
+                    }
+
+                    // TODO: 레이아웃 변경
+                    // 레이아웃 설정
+                    @Override
+                    public void onLayout(Context context, RecyclerView recyclerView) {
+                        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
+                        linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+                        recyclerView.setLayoutManager(linearLayoutManager);
+                    }
+                });
+
+                // TODO: 클릭 이벤트 변경
+                // 리사이클러뷰 클릭 이벤트
+                messageRecyclerView.setOnItemClickListener(new MessageRecyclerView.OnItemClickInterface() {
+                    @Override
+                    public void onItemClickListener(View view, int position) {
+                    }
+
+                    @Override
+                    public void onItemLongClickListener(View view, int position) {
+                    }
+                });
+
+                messageRecyclerView.setContext(MeetingRoomActivity.this);
+                // TODO: 데이터 변경
+                // 데이터 세팅
+                messageRecyclerView.setDataList(chatList);
+                messageRecyclerView.setRecyclerView(meetingRoomChatRecyclerView);
+                // TODO: row item 레이아웃 변경
+                // row item 레이아웃 세팅
+                messageRecyclerView.setReceiveRowItem(R.layout.receive_message_row_item);
+                messageRecyclerView.setSendRowItem(R.layout.send_message_row_item);
+                // 적용
+                messageRecyclerView.adapt();
+
+            }
+
+            @Override
+            public void onError(Exception e) {
+                e.printStackTrace();
+                Log.e(TAG, e.getMessage());
+            }
+        });
+
+        // 프래그먼트 매니저 가져오기
+        FragmentManager fragmentManager = getSupportFragmentManager();
+        fragmentManager.beginTransaction()
+                .add(R.id.mainFrameLayout, peersFragment)
+                .add(R.id.mainFrameLayout, whiteboardFragment)
+                .add(R.id.mainFrameLayout, meetingRoomChatFragment)
+                .show(peersFragment)
+                .hide(whiteboardFragment)
+                .hide(meetingRoomChatFragment)
+                .commit();
+    }
 
     /**
      * 앨범에서 이미지를 선택 했을 경우
@@ -659,6 +952,36 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     };
 
+    public ServiceConnection testServiceConn = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            TestService.TestServiceBinder binder = (TestService.TestServiceBinder) service;
+            testService = binder.getService();
+            isTestServiceBound = true;
+            Log.d(TAG, "바인드 받아옴");
+
+            // 바로 미디어 프로젝션 세팅
+            testService.setContext(MeetingRoomActivity.this);
+
+            CustomCapturer customCapturer = getCustomVideoCapturer(VIDEO);
+//            testService.startCapture(customCapturer.getVideoCapturer());
+
+            // 서비스 시작
+            Intent intent = new Intent(MeetingRoomActivity.this, TestService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            isTestServiceBound = false;
+        }
+    };
+
     /**
      * 여러 활동 결과 호출이 있고
      * 다른 계약을 사용하거나
@@ -692,7 +1015,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(TAG, "onCreate 동작");
+        Log.d(TAG, "[MeetingRoomActivity] onCreate 동작");
         binding = ActivityMeetingRoomBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -713,290 +1036,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
         mask1AdjustedCX = mask1OriginalCX * mask1Ratio;
         mask1AdjustedCY = mask1OriginalCY * mask1Ratio;
         mask1AdjustedD = mask1OriginalD * mask1Ratio;
-
-
-        /**
-         * 프레그 먼트 세팅
-         */
-        peersFragment = PeersFragment.newInstance(new PeersFragment.CreateResultInterface() {
-            @Override
-            public void onCreated(FragmentPeersBinding peersBinding) {
-                MeetingRoomActivity.this.peersBinding = peersBinding;
-
-                // 로컬 세팅 시작
-                localSetting();
-
-//                handler.postDelayed(new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        peersBinding.mainSurfaceView.addFrameListener(new EglRenderer.FrameListener() {
-//                            @Override
-//                            public void onFrame(Bitmap bitmap) {
-//                                Log.d(TAG, "bitmap:" + bitmap);
-//                            }
-//                        }, 1);
-//                    }
-//                }, 1500);
-
-            }
-
-            @Override
-            public void onError(Exception e) {
-                e.printStackTrace();
-                Log.e(TAG, e.getMessage());
-            }
-        });
-
-        /** 화이트 보드 프레그먼트 생성 */
-        whiteboardFragment = WhiteboardFragment.newInstance(new WhiteboardFragment.CreateResultInterface() {
-            @Override
-            public void onCreated(FragmentWhiteboardBinding whiteboardBinding, ColorModel colorModel) {
-                MeetingRoomActivity.this.whiteboardBinding = whiteboardBinding;
-                MeetingRoomActivity.this.initDrawingView(colorModel);
-            }
-
-            @Override
-            public void onError(Exception e) {
-                e.printStackTrace();
-                Log.e(TAG, e.getMessage());
-            }
-        });
-
-        /** 채팅 프레그먼트 */
-        meetingRoomChatFragment = MeetingRoomChatFragment.newInstance(new MeetingRoomChatFragment.CreateResultInterface() {
-            @Override
-            public void onCreated(FragmentMeetingRoomChatBinding binding) {
-                meetingRoomChatBinding = binding;
-
-                // 메시지 보내기
-                meetingRoomChatBinding.chatSendbutton.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        // 메시지 추출
-                        String msg = meetingRoomChatBinding.messageText.getText().toString();
-                        UserModel userModel = getUserModel(socketId);
-
-                        String date = getCurrentLocalDateTime();
-                        // 메시지 추가
-                        chatList.add(new MessageModel(MessageModel.MessageType.SEND, msg, null, userModel, date));
-
-                        // 리사이클러뷰 인지시키기
-                        int addIdx = messageRecyclerView.getAdapter().getItemCount() - 1;
-
-                        // 에디터 초기화
-                        meetingRoomChatBinding.messageText.setText("");
-
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                // 리사이클러뷰 새롭게 인지
-                                messageRecyclerView.getAdapter().notifyItemInserted(addIdx);
-                                // 스크롤 제일 아래로
-                                messageRecyclerView.getRecyclerView().scrollToPosition(messageRecyclerView.getAdapter().getItemCount() - 1);
-                            }
-                        });
-
-                        // 연결된 피어 모두애게 그리기 정보를 보낸다.
-                        for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
-                            CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
-                            DataChannel dataChannel = customPeerConnection.getDataChannel();
-                            String cmd = "chat";
-                            String type = "txt";
-                            String data = cmd + ";" + type + ";" + msg + ";" + date;
-                            ByteBuffer buffer = ByteBuffer.wrap(data.getBytes());
-                            dataChannel.send(new DataChannel.Buffer(buffer, false));
-                        }
-                    }
-                });
-
-                // 이미지 보내기
-                meetingRoomChatBinding.imageAddButton.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        Intent intent = new Intent(Intent.ACTION_PICK);
-                        intent.setType(MediaStore.Images.Media.CONTENT_TYPE);
-                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);  // 1개 이미지를 가져올 수 있도록 세팅
-                        intent.setData(MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                        activityAlbumResultLauncher.launch(intent);
-                    }
-                });
-
-                // 리사이클러뷰
-                RecyclerView meetingRoomChatRecyclerView = meetingRoomChatBinding.meetingRoomChatRecyclerView;
-
-                // 리사이클러뷰 바인드
-                messageRecyclerView = new MessageRecyclerView(new MessageRecyclerView.OnBind() {
-                    // TODO: ViewBind 변경
-                    // ViewBind 연동
-                    @Override
-                    public void onBindViewListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType) {
-                        Log.d(TAG, "viewHolder:" + viewHolder);
-                        Log.d(TAG, "view:" + view);
-                        if (viewType == MessageModel.MessageType.RECEIVE.getValue()) {
-                            viewHolder.setReceiveBinding(ReceiveMessageRowItemBinding.bind(view));
-                        } else {
-                            viewHolder.setSendBinding(SendMessageRowItemBinding.bind(view));
-                        }
-                    }
-
-                    // TODO: ViewBind 변경
-                    // 실제 View 와 데이터 연동
-                    @Override
-                    public void onBindViewHolderListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
-                        Log.d(TAG, "[onBindViewHolderListener] 동작");
-                        Log.d(TAG, "[position:" + position);
-
-                        MessageModel messageModel = chatList.get(position);
-
-                        Log.d(TAG, "messageModel:" + messageModel);
-
-                        // 받은 메시지
-                        if (chatList.get(position).getMessageType().getValue() == MessageModel.MessageType.RECEIVE.getValue()) {
-                            ReceiveMessageRowItemBinding binding = (ReceiveMessageRowItemBinding) (holder.receiveBinding);
-                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
-                            String filename = messageModel.getFilename();
-
-                            Log.d(TAG, "filename:" + filename);
-
-                            if (filename != null) {
-                                binding.msgContent.setVisibility(View.GONE);
-                                binding.receiveDate.setVisibility(View.GONE);
-
-                                binding.msgImage.setVisibility(View.VISIBLE);
-                                binding.receiveImgDate.setVisibility(View.VISIBLE);
-
-                                binding.receiveImgDate.setText(messageModel.getDate());
-
-                                Log.d(TAG, "Glide 동작");
-                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
-                                Glide
-                                    .with(MeetingRoomActivity.this)
-                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
-                                    /** Glide는 원본 비율을 유지한다. */
-                                    .override(500,500)
-                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
-                                    .listener(new RequestListener<Drawable>() {
-                                        @Override
-                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                                            // 이미지 로딩에 실패했을 때 수행할 작업
-                                            return false;
-                                        }
-
-                                        @Override
-                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                            Log.d(TAG, "Glide 이미지 로드 완료");
-                                            return false;
-                                        }
-                                    })
-                                    .into(binding.msgImage);
-
-                            } else {
-                                binding.msgContent.setVisibility(View.VISIBLE);
-                                binding.receiveDate.setVisibility(View.VISIBLE);
-
-                                binding.msgImage.setVisibility(View.GONE);
-                                binding.receiveImgDate.setVisibility(View.GONE);
-
-                                binding.msgContent.setText(messageModel.getMsg());
-                                binding.receiveDate.setText(messageModel.getDate());
-                            }
-
-                            binding.name.setText(messageModel.getSender().getClientId());
-                        // 보낸 메시지
-                        } else {
-                            SendMessageRowItemBinding binding = (SendMessageRowItemBinding) (holder.sendBinding);
-
-                            /** 이미지 파일이 존재하면 이미지파일을 보여주고 그렇지 않으면 텍스트를 보여주자. */
-                            String filename = messageModel.getFilename();
-                            if (filename != null) {
-                                binding.msgContent.setVisibility(View.GONE);
-                                binding.msgImage.setVisibility(View.VISIBLE);
-
-                                // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
-                                // 여기선 메시지 1개당 이미지 1개이기 때문에 항상 0 인덱스이다.
-                                Glide
-                                    .with(MeetingRoomActivity.this)
-                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
-                                    .override(500,500)
-                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
-                                    .listener(new RequestListener<Drawable>() {
-                                        @Override
-                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                                            // 이미지 로딩에 실패했을 때 수행할 작업
-                                            return false;
-                                        }
-
-                                        @Override
-                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                            return false;
-                                        }
-                                    })
-                                    .into(binding.msgImage);
-                            } else {
-                                binding.msgContent.setVisibility(View.VISIBLE);
-                                binding.msgImage.setVisibility(View.GONE);
-
-                                binding.msgContent.setText(messageModel.getMsg());
-                            }
-
-                            binding.sendDate.setText(messageModel.getDate());
-                            binding.sendImgDate.setText(messageModel.getDate());
-                        }
-                    }
-
-                    // TODO: 레이아웃 변경
-                    // 레이아웃 설정
-                    @Override
-                    public void onLayout(Context context, RecyclerView recyclerView) {
-                        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
-                        linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-                        recyclerView.setLayoutManager(linearLayoutManager);
-                    }
-                });
-
-                // TODO: 클릭 이벤트 변경
-                // 리사이클러뷰 클릭 이벤트
-                messageRecyclerView.setOnItemClickListener(new MessageRecyclerView.OnItemClickInterface() {
-                    @Override
-                    public void onItemClickListener(View view, int position) {
-                    }
-
-                    @Override
-                    public void onItemLongClickListener(View view, int position) {
-                    }
-                });
-
-                messageRecyclerView.setContext(MeetingRoomActivity.this);
-                // TODO: 데이터 변경
-                // 데이터 세팅
-                messageRecyclerView.setDataList(chatList);
-                messageRecyclerView.setRecyclerView(meetingRoomChatRecyclerView);
-                // TODO: row item 레이아웃 변경
-                // row item 레이아웃 세팅
-                messageRecyclerView.setReceiveRowItem(R.layout.receive_message_row_item);
-                messageRecyclerView.setSendRowItem(R.layout.send_message_row_item);
-                // 적용
-                messageRecyclerView.adapt();
-
-            }
-
-            @Override
-            public void onError(Exception e) {
-                e.printStackTrace();
-                Log.e(TAG, e.getMessage());
-            }
-        });
-
-        // 프래그먼트 매니저 가져오기
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        fragmentManager.beginTransaction()
-                .add(R.id.mainFrameLayout, peersFragment)
-                .add(R.id.mainFrameLayout, whiteboardFragment)
-                .add(R.id.mainFrameLayout, meetingRoomChatFragment)
-                .show(peersFragment)
-                .hide(whiteboardFragment)
-                .hide(meetingRoomChatFragment)
-                .commit();
 
         HandlerThread handlerThread = new HandlerThread("WebRTCThread");
         handlerThread.start();
@@ -1411,30 +1450,28 @@ public class MeetingRoomActivity extends AppCompatActivity {
         initializeSdpMediaCon();
 
         // 메인 SurfaceView를 초기화 한다
-        initializeMainSurfaceViews(new CreateSurfaceViewRendererResult() {
-            @Override
-            public void onSuccess() {
-                // 피어 팩토리 초기화
-                initializePeerConnectionFactory();
+        initializeMainSurfaceViews();
 
-                // 캡처러 초기화
-                initializeCapturer(Common.VIDEO, null);
+        // 피어 팩토리 초기화
+        initializePeerConnectionFactory();
 
-                // 트랙 생성
-                CustomTrack customTrack = createTrack(Common.VIDEO);
+        // 캡처러 초기화
+        initializeCapturer(Common.VIDEO, null);
 
-                // 프록시 싱크 생성
-                createProxySink("local", Common.VIDEO);
+        // 트랙 생성
+        CustomTrack customTrack = createTrack(Common.VIDEO);
 
-                // 트랙과 view 연동
-                bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
-            }
+        // 프록시 싱크 생성
+        createProxySink("local", Common.VIDEO);
 
-            @Override
-            public void onError() {
-                Log.e(TAG, "onError");
-            }
-        });
+        // 트랙과 view 연동
+        bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
+
+        ProxySink proxySink2 = createProxySink("local2", Common.VIDEO);
+        proxySink2.setTarget(remoteCustomSurfaceViewRenderer);
+        VideoTrack videoTrack = customTrack.getVideoTrack();
+        videoTrack.addSink(proxySink2);
+
     }
 
     public static int ConvertDPtoPX(Context context, int dp) {
@@ -2618,18 +2655,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
         socket.emit("message", message);
     }
 
-    private void initializeMainSurfaceViews(CreateSurfaceViewRendererResult createSurfaceViewRendererResult) {
+    private CustomSurfaceViewRenderer remoteCustomSurfaceViewRenderer;
+
+    private void initializeMainSurfaceViews() {
         rootEglBase = EglBase.create();
         peersBinding.mainSurfaceView.init(rootEglBase.getEglBaseContext(), null);
         peersBinding.mainSurfaceView.setEnableHardwareScaler(true);
         peersBinding.mainSurfaceView.setMirror(false);
 
-        int width = peersBinding.mainSurfaceView.getWidth();
-        Log.d(TAG, "width:" + width);
         peersBinding.mainSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "surfaceCreated:");
+                Log.d(TAG, "[Main SurfaceView] surfaceCreated");
                 final int width = (int) peersBinding.mainSurfaceView.getWidth();
                 final int height = (int) width;
 
@@ -2638,19 +2675,66 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
                 peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
 
-                createSurfaceViewRendererResult.onSuccess();
+//                createSurfaceViewRendererResult.onSuccess();
             }
 
             @Override
             public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-                Log.d(TAG, "surfaceChanged:");
+//                Log.d(TAG, "surfaceChanged:");
             }
 
             @Override
             public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "surfaceDestroyed:");
+                Log.d(TAG, "[Main SurfaceView] surfaceDestroyed");
             }
         });
+
+        remoteCustomSurfaceViewRenderer = new CustomSurfaceViewRenderer(MeetingRoomActivity.this);
+        remoteCustomSurfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
+        remoteCustomSurfaceViewRenderer.setEnableHardwareScaler(true);
+        remoteCustomSurfaceViewRenderer.setMirror(false);
+
+        remoteCustomSurfaceViewRenderer.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "[Main SurfaceView] surfaceCreated");
+                final int width = (int) remoteCustomSurfaceViewRenderer.getWidth();
+                final int height = (int) width;
+
+                ConstraintLayout.LayoutParams layoutParams = new ConstraintLayout.LayoutParams(width, height);
+                layoutParams.bottomToTop = R.id.layout;
+                layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
+                peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
+
+//                createSurfaceViewRendererResult.onSuccess();
+            }
+
+            @Override
+            public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+//                Log.d(TAG, "surfaceChanged:");
+            }
+
+            @Override
+            public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "[Main SurfaceView] surfaceDestroyed");
+            }
+        });
+        params = new WindowManager.LayoutParams(
+                1020,     // 가로
+                1020,        // 세로
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,    //  뷰가 다른 앱 위에 그려지도록 하는 윈도우 타입
+                // FLAG_NOT_FOCUSABLE : 포커스를 받지 않도록 설정
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_FULLSCREEN,          // 외부 터치 가능
+                PixelFormat.TRANSLUCENT);
+
+        params.gravity = Gravity.LEFT;
+
+        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        if(viewGroup != null){
+//            viewGroup.removeView(peersBinding.mainSurfaceView);
+            windowManager.addView(remoteCustomSurfaceViewRenderer, params);
+        }
 
     }
 
@@ -2809,6 +2893,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     if (remoteVideoTrack != null) remoteVideoTrack.setEnabled(true);
 
                     bindTrackAndView(clientId, type, null, remoteVideoTrack);
+
                 }
 
                 @Override
@@ -3178,13 +3263,70 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 Log.d(TAG, "미팅 서비스 언바운드");
             }
 
+            // 테스트 바인드 서비스 해제
+            if(isTestServiceBound){
+                unbindService(testServiceConn);
+                Log.d(TAG, "테스트 서비스 언바운드");
+            }
+
             Intent intent = new Intent(this, MeetingService.class);
             stopService(intent);
             Log.d(TAG, "미팅 서비스 중지");
 
+            // 테스트 서비스 중지
+            Intent testIntent = new Intent(this, TestService.class);
+            stopService(testIntent);
+            Log.d(TAG, "테스트 서비스 중지");
+
         } catch (Exception e) {
             Log.e(TAG, e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+
+    private WindowManager.LayoutParams params;
+    /**
+     * system_alert_window로 이미지 렌더링
+     */
+    public void showMainSurfaceView(){
+        // 메인 피어를 보여주자
+        windowManagerSetting();
+    }
+
+    public void stopMainSurfaceView(){
+        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        windowManager.removeView(peersBinding.mainSurfaceView);
+
+        viewGroup.addView(peersBinding.mainSurfaceView);
+    }
+
+    private Boolean isClickBackBtn = false;
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        isClickBackBtn = true;
+        Log.d(TAG, "onBackPressed");
+    }
+
+    private void windowManagerSetting(){
+        // Add the view to the window.
+        params = new WindowManager.LayoutParams(
+                1020,     // 가로
+                1020,        // 세로
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,    //  뷰가 다른 앱 위에 그려지도록 하는 윈도우 타입
+                // FLAG_NOT_FOCUSABLE : 포커스를 받지 않도록 설정
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_FULLSCREEN,          // 외부 터치 가능
+                PixelFormat.TRANSLUCENT);
+
+        params.gravity = Gravity.LEFT;
+
+        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        if(viewGroup != null){
+            viewGroup.removeView(peersBinding.mainSurfaceView);
+            windowManager.addView(peersBinding.mainSurfaceView, params);
         }
     }
 
@@ -3264,44 +3406,54 @@ public class MeetingRoomActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        Log.d(TAG, "onStart 동작");
+        Log.d(TAG, "[MeetingRoomActivity] onStart 동작");
         if(peersBinding != null){
             Log.d(TAG, "peersBinding.mainSurfaceView:" + peersBinding.mainSurfaceView);
         }
+
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        Log.d(TAG, "onStop 동작");
+        Log.d(TAG, "[MeetingRoomActivity] onStop 동작");
+
+        if(!isClickBackBtn){
+//            showMainSurfaceView();
+        }
+
+        isClickBackBtn = false;
+
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        Log.d(TAG, "onPause 동작");
+        Log.d(TAG, "[MeetingRoomActivity] onPause 동작");
 
-        for(int i=0; i<trackList.size(); i++){
-            CustomTrack customTrack = trackList.get(i);
-            if(customTrack.getType().equals(VIDEO)){
-                customTrack.getVideoTrack().setEnabled(false);
-                Log.d(TAG, "비디오 트랙 비활성화");
-                break;
-            }
-        }
+//        for(int i=0; i<trackList.size(); i++){
+//            CustomTrack customTrack = trackList.get(i);
+//            if(customTrack.getType().equals(VIDEO)){
+//                customTrack.getVideoTrack().setEnabled(false);
+//                Log.d(TAG, "비디오 트랙 비활성화");
+//                break;
+//            }
+//        }
     }
 
     @Override
     protected void onRestart() {
         super.onRestart();
+        Log.d(TAG, "[MeetingRoomActivity] onRestart 동작");
+//        stopMainSurfaceView();
 
-        for(int i=0; i<trackList.size(); i++){
-            CustomTrack customTrack = trackList.get(i);
-            if(customTrack.getType().equals(VIDEO)){
-                customTrack.getVideoTrack().setEnabled(true);
-                Log.d(TAG, "비디오 트랙 비활성화");
-                break;
-            }
-        }
+//        for(int i=0; i<trackList.size(); i++){
+//            CustomTrack customTrack = trackList.get(i);
+//            if(customTrack.getType().equals(VIDEO)){
+//                customTrack.getVideoTrack().setEnabled(true);
+//                Log.d(TAG, "비디오 트랙 비활성화");
+//                break;
+//            }
+//        }
     }
 }

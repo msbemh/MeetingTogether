@@ -35,6 +35,7 @@
             android:name=".ui.meetings.MeetingRoomActivity"
             android:exported="false"
             android:label="@string/title_activity_meeting_room"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
             android:name=".MainActivity"
@@ -52,6 +53,11 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <service
+            android:name="com.example.meetingtogether.services.TestService"
+            android:enabled="true"
+            android:exported="false" />
 
     </application>
 

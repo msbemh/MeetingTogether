@@ -170,9 +170,9 @@ public class MeetingService extends Service {
              * [NotificationCompat.Builder]
              * 알림을 만들기 위해 사용되는 클래스
              */
-            builder = new NotificationCompat.Builder(this, NotificationUtil.MEETING_CHANNEL_ID);
-            builder.setContentTitle("화상채팅");
-            builder.setContentText("미팅중...");
+            builder = new NotificationCompat.Builder(this, NotificationUtil.SHARE_CHANNEL_ID);
+            builder.setContentTitle("화면공유");
+            builder.setContentText("화면공유중...");
             builder.setSmallIcon(R.mipmap.ic_launcher);
             builder.setOngoing(true); // Swipe로 알림 삭제하는 기능 중지
 
@@ -199,7 +199,7 @@ public class MeetingService extends Service {
              * 알림 표시
              */
             NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-            notificationManager.notify(NotificationUtil.NOTIFICATION_MEETING_ID, builder.build());
+            notificationManager.notify(NotificationUtil.NOTIFICATION_SHARE_ID, builder.build());
 
             notification = builder.build();
 
@@ -207,15 +207,15 @@ public class MeetingService extends Service {
              * 포그라운드 서비스를 시작하면
              * 자동으로 Notification을 띄워준다.
              */
-            startForeground(NotificationUtil.NOTIFICATION_MEETING_ID, notification);
+            startForeground(NotificationUtil.NOTIFICATION_SHARE_ID, notification);
         }
     }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel serviceChannel = new NotificationChannel(
-                    NotificationUtil.MEETING_CHANNEL_ID,
-                    NotificationUtil.MEETING_CHANNEL_ID,
+                    NotificationUtil.SHARE_CHANNEL_ID,
+                    NotificationUtil.SHARE_CHANNEL_ID,
                     NotificationManager.IMPORTANCE_HIGH
             );
 

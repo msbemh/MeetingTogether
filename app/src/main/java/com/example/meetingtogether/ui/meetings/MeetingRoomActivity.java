@@ -7,8 +7,10 @@ import static com.example.meetingtogether.common.Common.VIDEO;
 import static com.example.meetingtogether.common.Common.WHITE_BOARD;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
@@ -24,6 +26,7 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
@@ -66,7 +69,9 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Display;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.ViewGroup;
@@ -352,20 +357,36 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
             // 모든 권한에 동의
             if (areAllGranted) {
-                // 테스트 서비스 바인드 시작
-                Intent intent = new Intent(MeetingRoomActivity.this, TestService.class);
-                bindService(intent, testServiceConn, Context.BIND_AUTO_CREATE);
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                intent.putExtra("type", "default");
 
-                // 프래그먼트들 세팅
-                fragmentsSetting();
-                // 시그널링 서버와 연결
-                connectToSignallingServer();
+                /** 윈도우 오버레이 권한 없으면 요청 */
+                if (!Settings.canDrawOverlays(MeetingRoomActivity.this)) {
+                    systemPermissionLauncher.launch(intent);
+                }else{
+                    fragAndSocketSetting();
+                }
+
             // 모든 권한에 동의 하지 않음
             } else {
                 showPermissionDialog();
             }
         }
     });
+
+    private void fragAndSocketSetting(){
+        // 테스트 서비스 바인드 시작
+        Intent intent = new Intent(MeetingRoomActivity.this, TestService.class);
+        bindService(intent, testServiceConn, Context.BIND_AUTO_CREATE);
+
+        // 프래그먼트들 세팅
+        fragmentsSetting();
+        // 시그널링 서버와 연결
+        connectToSignallingServer();
+    }
+
+    private Boolean isOpenAlbum = false;
 
     private void fragmentsSetting(){
         /**
@@ -375,7 +396,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onCreated(FragmentPeersBinding peersBinding) {
                 MeetingRoomActivity.this.peersBinding = peersBinding;
-
                 viewGroup = (ViewGroup) peersBinding.mainSurfaceView.getParent();
 
                 // 로컬 세팅 시작
@@ -403,6 +423,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 Log.e(TAG, e.getMessage());
             }
         });
+
+
 
         /** 채팅 프레그먼트 */
         meetingRoomChatFragment = MeetingRoomChatFragment.newInstance(new MeetingRoomChatFragment.CreateResultInterface() {
@@ -455,6 +477,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 meetingRoomChatBinding.imageAddButton.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
+                        isOpenAlbum = true;
                         Intent intent = new Intent(Intent.ACTION_PICK);
                         intent.setType(MediaStore.Images.Media.CONTENT_TYPE);
                         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);  // 1개 이미지를 가져올 수 있도록 세팅
@@ -819,6 +842,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(MeetingRoomActivity.this, "취소 됐습니다.", Toast.LENGTH_SHORT).show();
                 }
+                isOpenAlbum = false;
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage());
             }
@@ -846,6 +870,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 .setNegativeButton("취소하기", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface paramAnonymousDialogInterface, int paramAnonymousInt) {
                         Toast.makeText(MeetingRoomActivity.this, "권한을 취소하셨습니다.", Toast.LENGTH_SHORT).show();
+                        finish();
                     }
                 })
                 .create()
@@ -860,11 +885,22 @@ public class MeetingRoomActivity extends AppCompatActivity {
         public void onActivityResult(ActivityResult result) {
             if (Settings.canDrawOverlays(MeetingRoomActivity.this)) {
                 Log.d(TAG, "SYSTEM_ALERT_WINDOW 권한 완료");
-                // 여기서 화면 프로젝션 토큰을 받아오자.
-                mediaProjectionManager = getSystemService(MediaProjectionManager.class);
-                mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
+                if(result.getData() == null){
+                    fragAndSocketSetting();
+                }else{
+                    String type = result.getData().getStringExtra("type");
+
+                    if("screen_share".equals(type)){
+                        // 여기서 화면 프로젝션 토큰을 받아오자.
+                        mediaProjectionManager = getSystemService(MediaProjectionManager.class);
+                        mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent());
+                    }else{
+                        fragAndSocketSetting();
+                    }
+                }
             } else {
                 Log.d(TAG, "SYSTEM_ALERT_WINDOW 권한 없음");
+                finish();
             }
         }
     });
@@ -1406,6 +1442,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         if (!Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
+            intent.putExtra("type", "screen_share");
             systemPermissionLauncher.launch(intent);
         } else {
             // 여기서 화면 프로젝션 토큰을 받아오자.
@@ -1440,12 +1477,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
          */
         disconnect();
 
+        toggleMainSurfaceView(false);
+
         super.onDestroy();
     }
 
-    private void localSetting() {
-//            Log.d(TAG, "[스레드 네임]" + Thread.currentThread().getName());
+    private ProxySink remoteProxySink;
 
+    private void localSetting() {
         // 미디어 설정 초기화
         initializeSdpMediaCon();
 
@@ -1467,11 +1506,81 @@ public class MeetingRoomActivity extends AppCompatActivity {
         // 트랙과 view 연동
         bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
 
-        ProxySink proxySink2 = createProxySink("local2", Common.VIDEO);
-        proxySink2.setTarget(remoteCustomSurfaceViewRenderer);
-        VideoTrack videoTrack = customTrack.getVideoTrack();
-        videoTrack.addSink(proxySink2);
+        /** Remote View 를 위한 설정 */
+        remoteProxySink = createProxySink("remoteLocal", Common.VIDEO);
+        remoteProxySink.setVideoTrack(customTrack.getVideoTrack());
+        remoteProxySink.setTarget(remoteCustomSurfaceViewRenderer);
+        // 카메라 비디오 트랙 <=> ProxySink <=> SurfaceView
+        customTrack.getVideoTrack().addSink(remoteProxySink);
 
+        remoteCustomSurfaceViewRenderer.setOnLongClickListener(new View.OnLongClickListener() {
+            private int initialX = 0;
+            private int initialY = 0;
+
+            @Override
+            public boolean onLongClick(View view) {
+                remoteCustomSurfaceViewRenderer.setOnTouchListener(new View.OnTouchListener() {
+                    float initialTouchX = 0;
+                    float initialTouchY = 0;
+                    @Override public boolean onTouch(View v, MotionEvent event) {
+                        switch (event.getAction()) {
+//                            case MotionEvent.ACTION_DOWN:
+//                                initialX = params.x;
+//                                initialY = params.y;
+//                        Log.d(TAG, "[ACTION_DOWN]");
+//                        Log.d(TAG, "params.x:" + params.x);
+//                        Log.d(TAG, "params.y:" + params.y);
+//                        Log.d(TAG, "initialX:" + initialX);
+//                        Log.d(TAG, "initialY:" + initialY);
+//                                initialTouchX = event.getRawX();
+//                                initialTouchY = event.getRawY();
+//                        Log.d(TAG, "initialTouchX:" + initialTouchX);
+//                        Log.d(TAG, "initialTouchY:" + initialTouchY);
+//                                return true;
+                            case MotionEvent.ACTION_UP:
+                                remoteCustomSurfaceViewRenderer.setOnTouchListener(null);
+                                initialX = params.x;
+                                initialY = params.y;
+                                return true;
+                            case MotionEvent.ACTION_MOVE:
+                        Log.d(TAG, "[ACTION_MOVE]");
+//                        Log.d(TAG, "initialX:" + initialX);
+//                        Log.d(TAG, "initialY:" +initialY);
+                        Log.d(TAG, "event.getRawX():" +event.getRawX());
+                        Log.d(TAG, "event.getRawY() :" +event.getRawY() );
+                        Log.d(TAG, "[전]initialTouchX :" +initialTouchX );
+                        Log.d(TAG, "[전]initialTouchY :" +initialTouchY );
+                                if(initialTouchX == 0 && initialTouchY == 0){
+                                    initialTouchX = event.getRawX();
+                                    initialTouchY = event.getRawY();
+                                }
+                                Log.d(TAG, "[후]initialTouchX :" +initialTouchX );
+                                Log.d(TAG, "[후]initialTouchY :" +initialTouchY );
+                                params.x = initialX + (int) (event.getRawX() - initialTouchX);
+                                params.y = initialY + (int) (event.getRawY() - initialTouchY);
+                        Log.d(TAG, "params.x:" + params.x);
+                        Log.d(TAG, "params.y:" + params.y);
+                                WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+                                windowManager.updateViewLayout(remoteCustomSurfaceViewRenderer, params);
+                                return true;
+                        }
+                        return false;
+                    }
+                });
+                return true;
+            }
+        });
+
+        remoteCustomSurfaceViewRenderer.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MeetingRoomActivity.this, MeetingRoomActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+
+                Toast.makeText(MeetingRoomActivity.this, "클릭!!", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     public static int ConvertDPtoPX(Context context, int dp) {
@@ -1684,8 +1793,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
             Log.d(TAG, tagFlag + "surfaceViewRenderer:" + surfaceViewRenderer);
             CustomTrack customTrack = getCustomTrack(type);
             VideoTrack videoTrack = customTrack.getVideoTrack();
+            proxySink.setVideoTrack(videoTrack);
             videoTrack.addSink(proxySink);
         } else {
+            proxySink.setVideoTrack(remoteVideoTrack);
             remoteVideoTrack.addSink(proxySink);
         }
     }
@@ -2689,53 +2800,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        /** 외부 SurfaceView 생성 */
         remoteCustomSurfaceViewRenderer = new CustomSurfaceViewRenderer(MeetingRoomActivity.this);
         remoteCustomSurfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
         remoteCustomSurfaceViewRenderer.setEnableHardwareScaler(true);
         remoteCustomSurfaceViewRenderer.setMirror(false);
-
-        remoteCustomSurfaceViewRenderer.getHolder().addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "[Main SurfaceView] surfaceCreated");
-                final int width = (int) remoteCustomSurfaceViewRenderer.getWidth();
-                final int height = (int) width;
-
-                ConstraintLayout.LayoutParams layoutParams = new ConstraintLayout.LayoutParams(width, height);
-                layoutParams.bottomToTop = R.id.layout;
-                layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
-                peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
-
-//                createSurfaceViewRendererResult.onSuccess();
-            }
-
-            @Override
-            public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-//                Log.d(TAG, "surfaceChanged:");
-            }
-
-            @Override
-            public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "[Main SurfaceView] surfaceDestroyed");
-            }
-        });
-        params = new WindowManager.LayoutParams(
-                1020,     // 가로
-                1020,        // 세로
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,    //  뷰가 다른 앱 위에 그려지도록 하는 윈도우 타입
-                // FLAG_NOT_FOCUSABLE : 포커스를 받지 않도록 설정
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_FULLSCREEN,          // 외부 터치 가능
-                PixelFormat.TRANSLUCENT);
-
-        params.gravity = Gravity.LEFT;
-
-        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-
-        if(viewGroup != null){
-//            viewGroup.removeView(peersBinding.mainSurfaceView);
-            windowManager.addView(remoteCustomSurfaceViewRenderer, params);
-        }
-
     }
 
     private void initializePeerConnectionFactory() {
@@ -3289,16 +3358,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
     /**
      * system_alert_window로 이미지 렌더링
      */
-    public void showMainSurfaceView(){
-        // 메인 피어를 보여주자
-        windowManagerSetting();
-    }
+    public void toggleMainSurfaceView(boolean on){
+        if(on){
+            // 메인 피어를 보여주자
+            windowManagerSetting();
+        }else{
+            WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if(remoteCustomSurfaceViewRenderer.getWindowToken() != null){
+                windowManager.removeView(remoteCustomSurfaceViewRenderer);
+            }
+        }
 
-    public void stopMainSurfaceView(){
-        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        windowManager.removeView(peersBinding.mainSurfaceView);
-
-        viewGroup.addView(peersBinding.mainSurfaceView);
     }
 
     private Boolean isClickBackBtn = false;
@@ -3313,21 +3383,38 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private void windowManagerSetting(){
         // Add the view to the window.
         params = new WindowManager.LayoutParams(
-                1020,     // 가로
-                1020,        // 세로
+                500,     // 가로
+                500,        // 세로
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,    //  뷰가 다른 앱 위에 그려지도록 하는 윈도우 타입
                 // FLAG_NOT_FOCUSABLE : 포커스를 받지 않도록 설정
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_FULLSCREEN,          // 외부 터치 가능
                 PixelFormat.TRANSLUCENT);
 
-        params.gravity = Gravity.LEFT;
+        /** Window Display 로 Center x,y 값 추출 */
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getRealSize(size);
+
+        float center_x = size.x/2;
+        float center_y = size.y/2;
+
+        params.x = 0;
+        params.y = 0;
+//        params.gravity = Gravity.CENTER;
+
+        ProxySink mainProxySink = getMainProxyVideoSink();
+        VideoTrack mainVideoTrack = mainProxySink.getVideoTrack();
+
+        /** 전에 연동된 비디오 싱크 제거 */
+        VideoTrack beforeVideoTrack = remoteProxySink.getVideoTrack();
+        beforeVideoTrack.removeSink(remoteProxySink);
+
+        /** 메인 비디오 트랙과 연동 */
+        remoteProxySink.setVideoTrack(mainVideoTrack);
+        mainVideoTrack.addSink(remoteProxySink);
 
         WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-
-        if(viewGroup != null){
-            viewGroup.removeView(peersBinding.mainSurfaceView);
-            windowManager.addView(peersBinding.mainSurfaceView, params);
-        }
+        windowManager.addView(remoteCustomSurfaceViewRenderer, params);
     }
 
     public DrawingView getDrawingView() {
@@ -3418,12 +3505,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
         super.onStop();
         Log.d(TAG, "[MeetingRoomActivity] onStop 동작");
 
-        if(!isClickBackBtn){
-//            showMainSurfaceView();
+        /**
+         * isMeetingServiceBound : 화면 공유 중이면 true
+         */
+        if(!isClickBackBtn
+            && peersBinding != null
+            && peersBinding.mainSurfaceView != null
+            && !isMeetingServiceBound
+            && !isOpenAlbum){
+            toggleMainSurfaceView(true);
         }
-
         isClickBackBtn = false;
-
     }
 
     @Override
@@ -3445,7 +3537,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     protected void onRestart() {
         super.onRestart();
         Log.d(TAG, "[MeetingRoomActivity] onRestart 동작");
-//        stopMainSurfaceView();
+        toggleMainSurfaceView(false);
 
 //        for(int i=0; i<trackList.size(); i++){
 //            CustomTrack customTrack = trackList.get(i);

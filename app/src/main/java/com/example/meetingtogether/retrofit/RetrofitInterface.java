@@ -1,5 +1,6 @@
 package com.example.meetingtogether.retrofit;
 
+import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
 
 import java.util.List;
@@ -29,7 +30,10 @@ public interface RetrofitInterface {
 
     @FormUrlEncoded
     @POST("login")
-    Call<LoginRetrofitResponse> postLogin(@Field("userId") String userId, @Field("password") String password);
+    Call<CommonRetrofitResponse<User>> postLogin(@Field("userId") String userId, @Field("password") String password);
+
+    @POST("sync-friend")
+    Call<CommonRetrofitResponse<List<Contact>>> postSyncFriend(@Body List<Contact> contactList);
 
     @POST("sign-up")
     Call<CommonRetrofitResponse> postSignUp(@Body User user);

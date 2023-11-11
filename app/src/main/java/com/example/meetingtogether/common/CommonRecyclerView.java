@@ -77,6 +77,10 @@ public class CommonRecyclerView {
 
         private List<?> dataList;
 
+        public void updateList(List<?> dataList){
+            this.dataList = dataList;
+        }
+
         public MyRecyclerAdapter(List<?> dataList){
             this.dataList = dataList;
         }

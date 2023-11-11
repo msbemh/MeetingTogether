@@ -16,7 +16,7 @@ import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.ActivityLoginBinding;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
-import com.example.meetingtogether.retrofit.LoginRetrofitResponse;
+import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
 import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
 
@@ -83,14 +83,14 @@ public class LoginActivity extends AppCompatActivity {
                 Util.showDialog(LoginActivity.this, binding.loginConstraintLayout);
 
                 /** 서버로 로그인 요청 */
-                Call<LoginRetrofitResponse> call = RetrofitService.getInstance().getService().postLogin(email, cryptoPassword);
-                call.enqueue(new Callback<LoginRetrofitResponse>() {
+                Call<CommonRetrofitResponse<User>> call = RetrofitService.getInstance().getService().postLogin(email, cryptoPassword);
+                call.enqueue(new Callback<CommonRetrofitResponse<User>>() {
                     @Override
-                    public void onResponse(Call<LoginRetrofitResponse> call, Response<LoginRetrofitResponse> response) {
+                    public void onResponse(Call<CommonRetrofitResponse<User>> call, Response<CommonRetrofitResponse<User>> response) {
                         // 응답 처리
                         if (response.isSuccessful() && response.body().isResult()) {
 
-                            Util.user = response.body().getUser();
+                            Util.user = response.body().getData();
 
                             SharedPreferenceRepository.saveUserForAutoLogin(Util.user);
 
@@ -110,7 +110,7 @@ public class LoginActivity extends AppCompatActivity {
                     }
 
                     @Override
-                    public void onFailure(Call<LoginRetrofitResponse> call, Throwable t) {
+                    public void onFailure(Call<CommonRetrofitResponse<User>> call, Throwable t) {
                         // 오류 처리
                         Log.d(TAG, t.getMessage());
                         Util.hideDialog();

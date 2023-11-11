@@ -3,12 +3,17 @@ package com.example.meetingtogether.common;
 import static android.content.Context.TELEPHONY_SERVICE;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.Dialog;
 import android.app.ProgressDialog;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
+import android.net.Uri;
+import android.provider.ContactsContract;
 import android.telephony.TelephonyManager;
 import android.text.Layout;
 import android.util.Log;
@@ -20,6 +25,7 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
 
 import com.example.meetingtogether.R;
+import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
 
 import java.math.BigInteger;
@@ -40,7 +46,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
-    private static final String TAG = Util.class.getSimpleName();
+    private static final String TAG = "TEST";
 
     public static int ACTION_CREATE = 0;
     public static int ACTION_EDIT = 1;
@@ -260,6 +266,42 @@ public class Util {
         if(progressBar != null) progressBar.setVisibility(View.GONE);
 
     }
+
+    public static ArrayList<Contact> getContactsString(Context context) {
+        ArrayList<Contact> result = new ArrayList<>();
+        ContentResolver resolver = context.getContentResolver();
+
+        Uri phoneUri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
+
+        String[] projection = {
+//        ContactsContract.CommonDataKinds.Phone.CONTACT_ID // 인덱스 값, 중복될 수 있음 -- 한 사람 번호가 여러개인 경우
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                ,ContactsContract.CommonDataKinds.Phone.NUMBER};
+
+        String sortOrder = ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
+
+        Cursor cursor = resolver.query(phoneUri, projection, null, null, sortOrder);
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+//        int idIndex = cursor.getColumnIndex(projection[0]); // 이름을 넣어주면 그 칼럼을 가져와준다.
+                int nameIndex = cursor.getColumnIndex(projection[0]);
+                int numberIndex = cursor.getColumnIndex(projection[1]);
+//        String id = cursor.getString(idIndex);
+
+                String name = cursor.getString(nameIndex);
+                String number = cursor.getString(numberIndex);
+                Contact contact = new Contact(name, number);
+                result.add(contact);
+
+            }
+        }
+
+        // 데이터 계열은 반드시 닫아줘야 한다.
+        cursor.close();
+        return result;
+    }
+
 
 
 

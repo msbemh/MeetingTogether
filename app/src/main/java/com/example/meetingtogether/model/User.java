@@ -1,7 +1,6 @@
 package com.example.meetingtogether.model;
 
-public class User {
-
+public class User extends CommonModel{
     private String id;
     private String password;
     private String name;
@@ -10,23 +9,31 @@ public class User {
     private String jwt;
 
     public User(String id, String password, String nickName, String phoneNum) {
-        this.id = id;
+        super();
         this.password = password;
         this.nickName = nickName;
         this.phoneNum = phoneNum;
     }
 
     public User(String id, String password) {
-        this.id = id;
+        super();
         this.password = password;
-    }
-
-    public void setJwt(String jwt) {
-        this.jwt = jwt;
     }
 
     public String getId() {
         return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getJwt() {
+        return jwt;
+    }
+
+    public void setJwt(String jwt) {
+        this.jwt = jwt;
     }
 
     public String getPassword() {
@@ -45,7 +52,4 @@ public class User {
         return phoneNum;
     }
 
-    public String getJwt() {
-        return jwt;
-    }
 }

@@ -10,17 +10,18 @@
         android:id="@+id/profile_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
         android:layout_margin="10dp"
+        android:gravity="center_vertical"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@+id/search_edit">
+
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:orientation="vertical"
+            android:layout_height="wrap_content"
             android:layout_margin="10dp"
-            android:padding="10dp"
-            android:layout_height="wrap_content">
+            android:orientation="vertical"
+            android:padding="10dp">
 
             <ImageView
                 android:id="@+id/imageView_profile"
@@ -45,8 +46,8 @@
                 android:id="@+id/profile_name"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="left"
                 android:layout_marginLeft="10dp"
+                android:gravity="left"
                 android:text="[이름]"
                 android:textColor="@color/black"
                 android:textSize="20sp"
@@ -57,5 +58,36 @@
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.cardview.widget.CardView>
+
+    <EditText
+        android:id="@+id/search_edit"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:inputType="textPersonName"
+        android:text="사용자 검색"
+        app:layout_constraintEnd_toStartOf="@+id/sync_friend_btn"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/sync_friend_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="사용자 동기화"
+        app:layout_constraintBottom_toBottomOf="@+id/search_edit"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/search_edit" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/user_list_recyclerview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:paddingBottom="10dp"
+        android:layout_marginTop="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/profile_card" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -3,10 +3,15 @@ package com.example.meetingtogether.sharedPreference;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class SharedPreferenceRepository {
     private static final String TAG = SharedPreferenceRepository.class.getSimpleName();
@@ -31,17 +36,46 @@ public class SharedPreferenceRepository {
         }
     }
 
+    public static void saveFriendList(List<Contact> responseContactList){
+        try {
+            Gson gson = new Gson();
+            String json = gson.toJson(responseContactList);
+
+            Log.d(TAG, "json:" + json);
+            editor.putString("friendList", json);
+            editor.apply();
+        } catch (Exception e) {
+            Log.e(TAG, e.toString());
+            e.printStackTrace();
+        }
+    }
+
     public static User getUser(){
         try {
             String userJson = pref.getString("user", null);
             if(userJson == null) return null;
-
 
             Gson gson = new Gson();
             User user = gson.fromJson(userJson, User.class);
 
             Log.d(TAG, "user:" + user);
             return user;
+        } catch (Exception e) {
+            Log.e(TAG, e.toString());
+            e.printStackTrace();
+        }
+        return null;
+    }
+    public static List<Contact> getFriendList(){
+        try {
+            String friendListJson = pref.getString("friendList", null);
+            if(friendListJson == null) return null;
+
+            Gson gson = new Gson();
+            List<Contact> friendList = gson.fromJson(friendListJson, new TypeToken<ArrayList<Contact>>(){}.getType());
+
+            Log.d(TAG, "friendList:" + friendList);
+            return friendList;
         } catch (Exception e) {
             Log.e(TAG, e.toString());
             e.printStackTrace();

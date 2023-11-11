@@ -71,6 +71,7 @@ public class PublicFragment extends Fragment {
                 binding.textViewTitle.setText(dataList.get(position).get("room").toString() + "번 방");
                 binding.textViewSubTitle.setText("테스트");
             }
+
             // TODO: 레이아웃 변경
             // 레이아웃 설정
             @Override

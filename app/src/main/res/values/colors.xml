@@ -15,4 +15,6 @@
     <color name="blue">#0000FF</color>
     <color name="indigo">#000066</color>
     <color name="purple">#FF00FF</color>
+    <color name="silver">#C0C0C0</color>
+    <color name="example_6_month_bg_color2">#F2C4B2</color>
 </resources>

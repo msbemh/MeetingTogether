@@ -19,10 +19,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
 
     <application
         android:name=".MyApplication"
-        android:usesCleartextTraffic="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -30,7 +32,20 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MeetingTogether"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
+        <activity
+            android:name=".ui.users.ProfileActivity"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar"
+            android:exported="false" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.user.SignUpActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
             android:name=".ui.meetings.MeetingRoomActivity"
             android:exported="false"
@@ -38,9 +53,10 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.user.LoginActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -53,12 +69,10 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
-
         <service
             android:name="com.example.meetingtogether.services.TestService"
             android:enabled="true"
             android:exported="false" />
-
     </application>
 
 </manifest>

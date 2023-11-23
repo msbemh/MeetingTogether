@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".ui.users.ProfileActivity">
+    tools:context=".ui.users.ProfileEditActivity">
 
     <LinearLayout
         android:id="@+id/linearLayout"
@@ -31,7 +31,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="center_horizontal"
-            android:text="프로필"
+            android:text="프로필 편집"
             android:textColor="@color/black"
             android:textSize="20sp" />
 
@@ -41,8 +41,7 @@
             android:layout_height="match_parent"
             android:padding="20dp"
             android:scaleType="centerCrop"
-            android:src="@drawable/check"
-            android:visibility="invisible" />
+            android:src="@drawable/check"/>
     </LinearLayout>
 
     <ImageView
@@ -67,90 +66,21 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/linearLayout" />
 
-    <TextView
+    <EditText
         android:id="@+id/profile_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
-
         android:gravity="center"
         android:text="[이름]"
         android:textColor="@color/white"
         android:textSize="25sp"
         android:textStyle="bold|normal"
+        android:ems="10"
+        android:inputType="textPersonName"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.501"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/profile_image" />
-
-    <Button
-        android:id="@+id/logout_btn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:text="로그아웃"
-        app:layout_constraintBottom_toBottomOf="@+id/linearLayout"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:padding="10dp"
-        app:layout_constraintBottom_toBottomOf="@+id/background_image"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <LinearLayout
-            android:id="@+id/chat_container"
-            android:layout_width="100dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <ImageView
-                android:id="@+id/imageView3"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/chat_white"/>
-
-            <TextView
-                android:id="@+id/textView2"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1:1 채팅"
-                android:textColor="@color/white"
-                android:textSize="20sp"
-                android:textStyle="normal"/>
-        </LinearLayout>
-        <LinearLayout
-            android:id="@+id/edit_container"
-            android:layout_width="100dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <ImageView
-                android:id="@+id/imageView4"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/edit_white" />
-
-            <TextView
-                android:id="@+id/textView3"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="편집"
-                android:textColor="@color/white"
-                android:textSize="20sp"
-                android:textStyle="normal" />
-        </LinearLayout>
-    </LinearLayout>
-
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>

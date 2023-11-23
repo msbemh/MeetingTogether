@@ -18,15 +18,21 @@ import android.telephony.TelephonyManager;
 import android.text.Layout;
 import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.RequestOptions;
 import com.example.meetingtogether.R;
+import com.example.meetingtogether.dialogs.CustomDialog;
 import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
+import com.example.meetingtogether.ui.users.ProfileActivity;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -80,6 +86,8 @@ public class Util {
 
     private static final String EMAIL_REGEX =
             "^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$";
+
+    public static List<Contact> contactList = new ArrayList<>();
 
     public static boolean isEmailValid(String email) {
         Pattern pattern = Pattern.compile(EMAIL_REGEX);
@@ -302,8 +310,46 @@ public class Util {
         return result;
     }
 
+    public static void loadProfile(Context context, ImageView imageView, ProfileMap profileMap, CustomDialog.Type type){
+        RequestOptions requestOptions = null;
 
+        if(type == CustomDialog.Type.PROFILE_IMAGE){
+            requestOptions = new RequestOptions().circleCrop();
+            if(profileMap == null){
+                Glide
+                    .with(context)
+                    .load(R.mipmap.ic_launcher)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(500,500)
+                    .into(imageView);
+                return;
+            }
+        }else if(type == CustomDialog.Type.BACKGROUND_IMAGE){
+            requestOptions = new RequestOptions().centerCrop();
+            if(profileMap == null){
+                Glide
+                    .with(context)
+                    .load("")
+                    .placeholder(R.color.silver)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(500,500)
+                    .into(imageView);
+                return;
+            }
+        }
 
+        String imgPath = profileMap.getProfileImgPath();
 
+        Glide
+            .with(context)
+            .load("https://webrtc-sfu.kro.kr/" + imgPath)
+            .apply(requestOptions)
+            /** Glide는 원본 비율을 유지한다. */
+            .override(500,500)
+            .into(imageView);
+
+    }
 
 }

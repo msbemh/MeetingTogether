@@ -2,14 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-feature android:name="android.hardware.camera" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="true" />
     <uses-feature android:name="android.hardware.camera.autofocus" />
     <uses-feature
         android:glEsVersion="0x00020000"
         android:required="true" />
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -37,9 +38,27 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
-            android:name=".ui.users.ProfileActivity"
+            android:name=".ui.chats.ChatRoomActivity"
             android:theme="@style/Theme.MeetingTogether.NoActionBar"
             android:exported="false" />
+
+        <service
+            android:name=".services.ChatService"
+            android:enabled="true"
+            android:exported="true" />
+
+        <activity
+            android:name=".ui.users.ProfileDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar" />
+        <activity
+            android:name=".ui.users.ProfileEditActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar" />
+        <activity
+            android:name=".ui.users.ProfileActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
             android:name=".MainActivity"
             android:exported="false" />
@@ -67,12 +86,12 @@
         </activity>
 
         <service
-            android:name="com.example.meetingtogether.services.MeetingService"
+            android:name=".services.MeetingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
         <service
-            android:name="com.example.meetingtogether.services.TestService"
+            android:name=".services.TestService"
             android:enabled="true"
             android:exported="false" />
     </application>

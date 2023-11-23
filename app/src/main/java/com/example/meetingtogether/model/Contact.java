@@ -2,6 +2,8 @@ package com.example.meetingtogether.model;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.util.List;
+
 public class Contact extends CommonModel{
     @SerializedName("friendId")
     private String friendId;
@@ -12,10 +14,28 @@ public class Contact extends CommonModel{
     @SerializedName("friendPhoneNum")
     private String friendPhoneNum;
 
+    @SerializedName("friendImgPaths")
+    private List<ProfileMap> friendImgPaths;
+
     public Contact(String friendName, String friendPhoneNum) {
         super();
         this.friendName = friendName;
         this.friendPhoneNum = friendPhoneNum;
+    }
+
+    public Contact(String friendId, String friendName, String friendPhoneNum, List<ProfileMap> friendImgPaths) {
+        this.friendId = friendId;
+        this.friendName = friendName;
+        this.friendPhoneNum = friendPhoneNum;
+        this.friendImgPaths = friendImgPaths;
+    }
+
+    public List<ProfileMap> getFriendImgPaths() {
+        return friendImgPaths;
+    }
+
+    public void setFriendImgPaths(List<ProfileMap> friendImgPaths) {
+        this.friendImgPaths = friendImgPaths;
     }
 
     public String getFriendId() {

@@ -69,7 +69,7 @@ public class SharedPreferenceRepository {
     public static List<Contact> getFriendList(){
         try {
             String friendListJson = pref.getString("friendList", null);
-            if(friendListJson == null) return null;
+            if(friendListJson == null) return new ArrayList<>();
 
             Gson gson = new Gson();
             List<Contact> friendList = gson.fromJson(friendListJson, new TypeToken<ArrayList<Contact>>(){}.getType());
@@ -90,6 +90,16 @@ public class SharedPreferenceRepository {
     public static void deleteUserForAutoLogin(){
         try {
             editor.remove("user");
+            editor.apply();
+        }catch (Exception e) {
+            Log.e(TAG, e.toString());
+            e.printStackTrace();
+        }
+    }
+
+    public static void clear(){
+        try {
+            editor.clear();
             editor.apply();
         }catch (Exception e) {
             Log.e(TAG, e.toString());

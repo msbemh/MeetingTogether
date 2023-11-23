@@ -65,7 +65,7 @@
         android:layout_height="wrap_content"
         android:ems="10"
         android:inputType="textPersonName"
-        android:text="사용자 검색"
+        android:hint="사용자 검색"
         app:layout_constraintEnd_toStartOf="@+id/sync_friend_btn"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />

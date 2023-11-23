@@ -6,6 +6,7 @@ import com.example.meetingtogether.model.User;
 import java.util.List;
 
 import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.Field;
@@ -45,4 +46,12 @@ public interface RetrofitInterface {
     @FormUrlEncoded
     @POST("email-chk")
     Call<CommonRetrofitResponse> postEmailChk(@Field("userId") String userId);
+
+    @Multipart
+    @POST("update-profile-image")
+    Call<CommonRetrofitResponse> postProfileImages(@Part MultipartBody.Part profileImg, @Part MultipartBody.Part backgroundImg, @Part("info")RequestBody requestBody);
+
+    @FormUrlEncoded
+    @POST("delete-profile-image")
+    Call<CommonRetrofitResponse> postDeleteProfileImages(@Field("delete_file") String delete_file);
 }

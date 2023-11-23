@@ -664,6 +664,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 .commit();
     }
 
+
     /**
      * 앨범에서 이미지를 선택 했을 경우
      * Intent Callback

@@ -11,6 +11,7 @@ import androidx.viewbinding.ViewBinding;
 
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class CommonRecyclerView {
@@ -75,7 +76,7 @@ public class CommonRecyclerView {
 
     public class MyRecyclerAdapter extends RecyclerView.Adapter<MyRecyclerAdapter.ViewHolder>{
 
-        private List<?> dataList;
+        private List<?> dataList = new ArrayList<>();
 
         public void updateList(List<?> dataList){
             this.dataList = dataList;

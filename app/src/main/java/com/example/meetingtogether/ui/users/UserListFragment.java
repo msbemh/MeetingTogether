@@ -11,10 +11,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,6 +37,7 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
 import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.R;
@@ -44,7 +48,9 @@ import com.example.meetingtogether.databinding.FragmentUserlistBinding;
 import com.example.meetingtogether.databinding.ReceiveMessageRowItemBinding;
 import com.example.meetingtogether.databinding.SendMessageRowItemBinding;
 import com.example.meetingtogether.databinding.UserRowItemBinding;
+import com.example.meetingtogether.dialogs.CustomDialog;
 import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
@@ -53,6 +59,7 @@ import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 import com.example.meetingtogether.ui.user.LoginActivity;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +164,7 @@ public class UserListFragment extends Fragment {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(getActivity(), ProfileActivity.class);
+                intent.putExtra("userId", Util.user.getId());
                 startActivity(intent);
             }
         });
@@ -173,7 +181,27 @@ public class UserListFragment extends Fragment {
             }
         });
 
-        dataList = SharedPreferenceRepository.getFriendList();
+        binding.searchEdit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                String searchText = binding.searchEdit.getText().toString();
+                searchFilter(searchText);
+
+            }
+        });
+
+        Util.contactList = SharedPreferenceRepository.getFriendList();
+        dataList = Util.contactList;
 
         // 리사이클러뷰
         RecyclerView userListRecyclerview = binding.userListRecyclerview;
@@ -192,6 +220,25 @@ public class UserListFragment extends Fragment {
             public void onBindViewHolderListener(CommonRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
                 UserRowItemBinding binding = (UserRowItemBinding)(holder.binding);
                 binding.profileName.setText(dataList.get(position).getFriendName());
+
+                String imgPath = null;
+                // 프로필 이미지만 필터링
+                if(dataList.get(position).getFriendImgPaths().size() > 0) {
+                    ProfileMap userProfileMap = dataList.get(position).getFriendImgPaths().stream().filter(profileMap -> profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())).findFirst().orElse(null);
+                    if(userProfileMap != null){
+                        imgPath = userProfileMap.getProfileImgPath();
+                    }
+                }
+
+                RequestOptions  requestOptions = new RequestOptions().circleCrop();
+
+                Glide
+                    .with(getActivity())
+                    .load(imgPath == null ? R.mipmap.ic_launcher : "https://webrtc-sfu.kro.kr/" + imgPath)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(500,500)
+                    .into(binding.imageViewProfile);
             }
 
             // TODO: 레이아웃 변경
@@ -209,7 +256,10 @@ public class UserListFragment extends Fragment {
         commonRecyclerView.setOnItemClickListener(new CommonRecyclerView.OnItemClickInterface() {
             @Override
             public void onItemClickListener(View view, int position) {
-                Toast.makeText(getActivity(), position + " short 클릭",Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(getActivity(), ProfileActivity.class);
+                String friendId = Util.contactList.get(position).getFriendId();
+                intent.putExtra("friendId", friendId);
+                startActivity(intent);
             }
             @Override
             public void onItemLongClickListener(View view, int position) {
@@ -228,7 +278,33 @@ public class UserListFragment extends Fragment {
         // 적용
         commonRecyclerView.adapt();
 
+    }
 
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        // 프로필 이미지 로드
+        ProfileMap profileMap = Util.user.getMyProfileMap();
+
+        Util.loadProfile(getActivity(), binding.imageViewProfile, profileMap, CustomDialog.Type.PROFILE_IMAGE);
+        binding.profileName.setText(Util.user.getName());
+    }
+
+    private List<Contact> filteredList = new ArrayList<>();
+
+    private void searchFilter(String searchText){
+        filteredList.clear();
+
+        for (int i = 0; i < dataList.size(); i++) {
+            if (dataList.get(i).getFriendName().toLowerCase().contains(searchText.toLowerCase())) {
+                filteredList.add(dataList.get(i));
+            }
+        }
+
+        CommonRecyclerView.MyRecyclerAdapter adapter = (CommonRecyclerView.MyRecyclerAdapter) binding.userListRecyclerview.getAdapter();
+        adapter.updateList(filteredList);
+        adapter.notifyDataSetChanged();
     }
 
     private void syncContact(){
@@ -243,16 +319,15 @@ public class UserListFragment extends Fragment {
                 // 응답 처리
                 if (response.isSuccessful() && response.body().isResult()) {
 
-                    List<Contact> responseContactList = response.body().getData();
+                    Util.contactList = response.body().getData();
 
                     // 귀찮으니까 그냥 덮어 씌우자 ㅎㅎ
-                    SharedPreferenceRepository.saveFriendList(responseContactList);
+                    SharedPreferenceRepository.saveFriendList(Util.contactList);
 
                     CommonRecyclerView.MyRecyclerAdapter adapter = (CommonRecyclerView.MyRecyclerAdapter) binding.userListRecyclerview.getAdapter();
 
-                    dataList = responseContactList;
+                    dataList = Util.contactList;
                     adapter.updateList(dataList);
-
                     adapter.notifyDataSetChanged();
 
                     Log.d(TAG, "친구목록 동기화가 완료");

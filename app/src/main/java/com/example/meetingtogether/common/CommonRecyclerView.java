@@ -76,10 +76,14 @@ public class CommonRecyclerView {
 
     public class MyRecyclerAdapter extends RecyclerView.Adapter<MyRecyclerAdapter.ViewHolder>{
 
-        private List<?> dataList = new ArrayList<>();
+        private List<?> dataList;
 
         public void updateList(List<?> dataList){
             this.dataList = dataList;
+        }
+
+        public List<?> getDataList(){
+            return dataList;
         }
 
         public MyRecyclerAdapter(List<?> dataList){

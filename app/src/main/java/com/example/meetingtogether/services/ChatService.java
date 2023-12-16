@@ -21,17 +21,18 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import com.example.meetingtogether.R;
+import com.example.meetingtogether.common.Util;
+import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.meetings.CustomCapturer;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
+import com.google.gson.Gson;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 
 public class ChatService extends Service {
 
@@ -45,14 +46,19 @@ public class ChatService extends Service {
 
     private Handler handler;
     private Socket socket;
-    private PrintWriter out;
-    private BufferedReader in;
+    private PrintWriter writer;
+    private BufferedReader reader;
+    private Gson gson = new Gson();
+    private final String SERVER_HOST = "34.64.140.200";
+    private final int SERVER_PORT = 11002;
+
 
     public class ChatServiceBinder extends Binder {
         public ChatService getService() {
             return ChatService.this;
         }
     }
+
     public ChatService() {
     }
 
@@ -60,6 +66,14 @@ public class ChatService extends Service {
     public interface ChatServiceInterface{
         void onReceived();
         void onError(String message);
+        void onUserAdd();
+//        void onUserList(MessageDTO messageDTO);
+//        void onRoomList(MessageDTO messageDTO);
+//        void onRoomAdd(MessageDTO messageDTO);
+//        void onRoomEnter(MessageDTO messageDTO);
+//        void onRoomOut(MessageDTO messageDTO);
+        void onMessage(MessageDTO messageDTO);
+//        void onExit(MessageDTO messageDTO);
     }
 
     public void setInterface(ChatService.ChatServiceInterface event){
@@ -77,35 +91,97 @@ public class ChatService extends Service {
         HandlerThread handlerChatThread = new HandlerThread("chat-thread");
         handlerChatThread.start();
         handler = new Handler(handlerChatThread.getLooper());
-
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                openSocket();
-            }
-        });
-
+//        handler.post(new Runnable() {
+//            @Override
+//            public void run() {
+//                openSocket();
+//            }
+//        });
     }
 
     private void openSocket(){
         try {
-            //소켓 생성
-            socket = new Socket();
-            //주소 생성
-            SocketAddress address = new InetSocketAddress("webrtc-sfu.kro.kr", 11000);
-            //주소에 해당하는 서버랑 연결
-            socket.connect(address);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    // 서버로 부터 메시지 받는 곳
+                    try {
+                        socket = new Socket(SERVER_HOST, SERVER_PORT);
 
-            // Create output stream to send data to the server
-            out = new PrintWriter(socket.getOutputStream(), true);
-            // Create input stream to receive data from the server
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        } catch (IOException e) {
+                        // Create output stream to send data to the server
+                        writer = new PrintWriter(socket.getOutputStream(), true);
+                        // Create input stream to receive data from the server
+                        reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                        // 사용자 추가 요청
+                        MessageDTO sendMsgDTO = new MessageDTO();
+                        sendMsgDTO.setUser(Util.user);
+                        sendMsgDTO.setType(MessageDTO.RequestType.USER_ADD);
+                        sendMsg(sendMsgDTO);
+
+                        /** 수신 대기 */
+                        String jsonString;
+                        /** 무한 츠쿠요미 */
+                        while ((jsonString = reader.readLine()) != null) {
+
+                            MessageDTO receiveMsgDTO = gson.fromJson(jsonString, MessageDTO.class);
+
+                            MessageDTO.RequestType type = receiveMsgDTO.getType();
+
+                            // 사용자 추가
+                            if(type == MessageDTO.RequestType.USER_ADD){
+                                System.out.println("프로그램 접속에 완료 됐습니다.");
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        event.onUserAdd();
+                                    }
+                                });
+                            // 방 리스트
+                            }else if(type == MessageDTO.RequestType.ROOM_LIST){
+//                        clientInterface.onRoomList(receiveMsgDTO);
+                            // 사용자 리스트
+                            }else if(type == MessageDTO.RequestType.USER_LIST){
+//                        clientInterface.onUserList(receiveMsgDTO);
+                            // 텍스트 메시지
+                            }else if(type == MessageDTO.RequestType.MESSAGE){
+                                System.out.println("프로그램 접속에 완료 됐습니다.");
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        event.onMessage(receiveMsgDTO);
+                                    }
+                                });
+//                        clientInterface.onMessage(receiveMsgDTO);
+                            // 방에 입장
+                            }else if(type == MessageDTO.RequestType.ROOM_ENTER){
+//                        clientInterface.onRoomEnter(receiveMsgDTO);
+                            // 방에서 나가기
+                            }else if(type == MessageDTO.RequestType.ROOM_OUT){
+//                        clientInterface.onRoomOut(receiveMsgDTO);
+                            // 방 생성
+                            }else if(type == MessageDTO.RequestType.ROOM_CREATE){
+//                        clientInterface.onRoomAdd(receiveMsgDTO);
+                            // 아예 나가기
+                            }else if(type == MessageDTO.RequestType.EXIT){
+//                        clientInterface.onExit(receiveMsgDTO);
+                            }
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        try {
+                            if(socket != null) socket.close();
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                    System.out.println("소켓 종료");
+                }
+            }).start();
+        } catch (Exception e) {
             Log.e(TAG, e.getMessage());
         }
     }
-
-
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -114,15 +190,20 @@ public class ChatService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
+        openSocket();
         return START_NOT_STICKY;
     }
 
-    public void sendMsg(String msg){
+    public void sendMsg(MessageDTO messageDTO){
+        /**
+         * Json String으로 변환과
+         * Socket Send 가 느릴 수 있으니까 비동기적으로 보내주자
+         */
         handler.post(new Runnable() {
             @Override
             public void run() {
-                out.println(msg);
+                String jsonString = gson.toJson(messageDTO);
+                writer.println(jsonString);
             }
         });
     }
@@ -139,7 +220,7 @@ public class ChatService extends Service {
              */
             builder = new NotificationCompat.Builder(this, NotificationUtil.CHAT_CHANNEL_ID);
             builder.setContentTitle("채팅 서비스");
-            builder.setContentText("동장중 ... ");
+            builder.setContentText("동작중 ... ");
             builder.setSmallIcon(R.mipmap.ic_launcher);
             builder.setOngoing(false); // Swipe로 알림 삭제하는 기능 중지
 

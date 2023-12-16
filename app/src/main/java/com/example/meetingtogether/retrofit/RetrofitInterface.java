@@ -2,6 +2,7 @@ package com.example.meetingtogether.retrofit;
 
 import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
+import com.example.meetingtogether.ui.meetings.DTO.ChatRoomListDTO;
 
 import java.util.List;
 
@@ -11,6 +12,7 @@ import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.Field;
 import retrofit2.http.FormUrlEncoded;
+import retrofit2.http.GET;
 import retrofit2.http.Multipart;
 import retrofit2.http.POST;
 import retrofit2.http.Part;
@@ -54,4 +56,7 @@ public interface RetrofitInterface {
     @FormUrlEncoded
     @POST("delete-profile-image")
     Call<CommonRetrofitResponse> postDeleteProfileImages(@Field("delete_file") String delete_file);
+
+    @GET("get_chat_room_list")
+    Call<List<ChatRoomListDTO>> getChatRoomList();
 }

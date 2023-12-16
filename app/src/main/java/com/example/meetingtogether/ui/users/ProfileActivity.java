@@ -1,5 +1,9 @@
 package com.example.meetingtogether.ui.users;
 
+import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
+import static com.example.meetingtogether.common.Common.ROOMID;
+import static com.example.meetingtogether.common.Common.ROOM_TYPE_ID;
+
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -28,6 +32,7 @@ import com.example.meetingtogether.databinding.ActivityLoginBinding;
 import com.example.meetingtogether.databinding.ActivityProfileBinding;
 import com.example.meetingtogether.dialogs.CustomDialog;
 import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
 import com.example.meetingtogether.ui.chats.ChatRoomActivity;
@@ -262,6 +267,12 @@ public class ProfileActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(ProfileActivity.this, ChatRoomActivity.class);
+
+                // 해당 방 번호, 방 유형, 상대방 Id 를 넘겨준다.
+                intent.putExtra(ROOMID, -1);
+                intent.putExtra(ROOM_TYPE_ID, MessageDTO.RoomType.INDIVIDUAL);
+                intent.putExtra(OTHER_USER_ID, "test@naver.com");
+
                 startActivity(intent);
             }
         });

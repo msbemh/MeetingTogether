@@ -1,17 +1,21 @@
 package com.example.meetingtogether;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
 
 import com.example.meetingtogether.databinding.ActivityMainBinding;
+import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.services.ChatService;
 import com.example.meetingtogether.services.TestService;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
@@ -111,6 +115,25 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    public static boolean isBound = false;
+    public static ChatService mChatService;
+
+    public ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            ChatService.ChatServiceBinder binder = (ChatService.ChatServiceBinder) service;
+            mChatService = binder.getService();
+            isBound = true;
+
+            /** 바인딩 이 완료 되면 서비스와 액티비티 인터페이스 설정 */
+            setChatServiceInterface();
+        }
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            isBound = false;
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -128,6 +151,7 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         NavigationUI.setupWithNavController(binding.navView, navController);
 
+
         permissionLauncher.launch(PERMISSIONS);
     }
 
@@ -141,10 +165,36 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
 
+        /** 메인 액비티비와 서비스를 바인딩 */
+        bindService(intent, connection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+    }
+
+    private void setChatServiceInterface(){
+        mChatService.setInterface(new ChatService.ChatServiceInterface() {
+            @Override
+            public void onReceived() {
+
+            }
+
+            @Override
+            public void onError(String message) {
+
+            }
+
+            @Override
+            public void onUserAdd() {
+                Toast.makeText(MainActivity.this, "채팅 서버와 연결 완료",Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onMessage(MessageDTO messageDTO) {
+                Toast.makeText(MainActivity.this, "메시지를 보낸게 완료 되었단다~~~",Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }

@@ -24,6 +24,7 @@ public class User extends CommonModel{
 
     public User(String id, String password) {
         super();
+        this.id = id;
         this.password = password;
     }
 

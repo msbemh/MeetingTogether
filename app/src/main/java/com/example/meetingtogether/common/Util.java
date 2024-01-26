@@ -11,11 +11,13 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.telephony.TelephonyManager;
 import android.text.Layout;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
@@ -34,6 +36,10 @@ import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.ui.users.ProfileActivity;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -350,6 +356,74 @@ public class Util {
             .override(500,500)
             .into(imageView);
 
+    }
+
+    public static String getBasicDateFormat(String dateString){
+
+        // 날짜를 문자열로 변환
+        String formattedDate = sdf.format(dateString);
+
+        return formattedDate;
+    }
+
+    public static int MAX_HEIGHT = 500;
+    public static int MAX_WIDTH = 500;
+
+    // 리샘플링 값 계산 : 타겟 너비와 높이를 기준으로 2의 거듭제곱인 샘플 크기 값을 계산
+    public static Bitmap resizeBitmapImage(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int inSampleSize = 1;
+
+        int halfHeight = 0;
+        int halfWidth = 0;
+        if (height > MAX_HEIGHT || width > MAX_WIDTH) {
+            halfHeight = height / 2;
+            halfWidth = width / 2;
+
+            while (halfHeight / inSampleSize >= MAX_HEIGHT && halfWidth / inSampleSize >= MAX_WIDTH) {
+                inSampleSize *= 2;
+            }
+        }
+
+        return Bitmap.createScaledBitmap(bitmap, halfWidth / inSampleSize, halfHeight / inSampleSize, true);
+    }
+
+    public static File saveBitmapToJpeg(Bitmap bitmap, Context context) {
+
+        //내부저장소 캐시 경로를 받아옵니다.
+        File storage = context.getCacheDir();
+
+        //저장할 파일 이름
+        String fileName = String.valueOf(System.currentTimeMillis()) + ".jpg";
+
+        //storage 에 파일 인스턴스를 생성합니다.
+        File imgFile = new File(storage, fileName);
+
+        try {
+
+            // 자동으로 빈 파일을 생성합니다.
+            imgFile.createNewFile();
+
+            // 파일을 쓸 수 있는 스트림을 준비합니다.
+            FileOutputStream out = new FileOutputStream(imgFile);
+
+            // compress 함수를 사용해 스트림에 비트맵을 저장합니다.
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 20, out);
+//            bitmap.recycle();
+
+            // 스트림 사용후 닫아줍니다.
+            out.close();
+
+            return imgFile;
+
+        } catch (FileNotFoundException e) {
+            Log.e("MyTag", "FileNotFoundException : " + e.getMessage());
+        } catch (IOException e) {
+            Log.e("MyTag", "IOException : " + e.getMessage());
+        }
+
+        return imgFile;
     }
 
 }

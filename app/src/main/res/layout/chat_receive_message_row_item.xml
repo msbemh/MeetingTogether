@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/chat_receive_message_row_item"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+
+    <TextView
+        android:id="@+id/msgContent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="200dp"
+        android:layout_marginTop="8dp"
+        android:background="@color/white"
+        android:padding="10dp"
+        android:textColor="@color/black"
+        android:textSize="15sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@+id/name"
+        app:layout_constraintTop_toBottomOf="@+id/name" />
+
+    <ImageView
+        android:id="@+id/msgImage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="visible"
+        android:maxWidth="200dp"
+        android:layout_marginTop="8dp"
+        android:scaleType="centerCrop"
+        android:background="@color/white"
+        android:padding="10dp"
+        app:layout_constraintStart_toStartOf="@+id/name"
+        app:layout_constraintTop_toBottomOf="@+id/name" />
+
+    <ImageView
+        android:id="@+id/profile"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:scaleType="centerCrop"
+        android:src="@mipmap/ic_launcher"
+        android:layout_marginStart="5dp"
+        android:layout_marginTop="16dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:text="이름"
+        android:textColor="@color/black"
+        app:layout_constraintStart_toEndOf="@+id/profile"
+        app:layout_constraintTop_toTopOf="@+id/profile" />
+
+    <TextView
+        android:id="@+id/receive_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:textSize="10sp"
+        android:text="오전 3:39"
+        android:visibility="gone"
+        android:textColor="@color/black"
+        app:layout_constraintBottom_toBottomOf="@+id/msgContent"
+        app:layout_constraintStart_toEndOf="@+id/msgContent" />
+
+    <TextView
+        android:id="@+id/receive_img_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:textSize="10sp"
+        android:text="오전 3:39"
+        android:visibility="visible"
+        android:textColor="@color/black"
+        app:layout_constraintBottom_toBottomOf="@+id/msgImage"
+        app:layout_constraintStart_toEndOf="@+id/msgImage" />
+
+    <TextView
+        android:id="@+id/no_read_cnt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1"
+        android:textColor="@color/yellow"
+        android:textSize="10sp"
+        android:textStyle="bold|normal"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/receive_date"
+        app:layout_constraintStart_toStartOf="@+id/receive_date" />
+
+    <TextView
+        android:id="@+id/image_group_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1 개"
+        android:textColor="@color/black"
+        android:textSize="10sp"
+        android:textStyle="bold|normal"
+        app:layout_constraintBottom_toTopOf="@+id/image_no_read_cnt"
+        app:layout_constraintStart_toStartOf="@+id/receive_img_date" />
+
+    <TextView
+        android:id="@+id/image_no_read_cnt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1"
+        android:textColor="@color/yellow"
+        android:textSize="10sp"
+        android:textStyle="bold|normal"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/receive_img_date"
+        app:layout_constraintStart_toStartOf="@+id/receive_img_date" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

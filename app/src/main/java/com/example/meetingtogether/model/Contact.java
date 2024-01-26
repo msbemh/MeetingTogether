@@ -17,6 +17,9 @@ public class Contact extends CommonModel{
     @SerializedName("friendImgPaths")
     private List<ProfileMap> friendImgPaths;
 
+    @SerializedName("roomId")
+    private int roomId;
+
     public Contact(String friendName, String friendPhoneNum) {
         super();
         this.friendName = friendName;
@@ -60,5 +63,13 @@ public class Contact extends CommonModel{
 
     public void setFriendPhoneNum(String friendPhoneNum) {
         this.friendPhoneNum = friendPhoneNum;
+    }
+
+    public int getRoomId() {
+        return roomId;
+    }
+
+    public void setRoomId(int roomId) {
+        this.roomId = roomId;
     }
 }

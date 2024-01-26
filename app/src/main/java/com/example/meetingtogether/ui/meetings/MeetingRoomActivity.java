@@ -1,8 +1,11 @@
 package com.example.meetingtogether.ui.meetings;
 
 import static com.example.meetingtogether.common.Common.CHAT;
+import static com.example.meetingtogether.common.Common.HOST;
+import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
 import static com.example.meetingtogether.common.Common.PEERS;
 import static com.example.meetingtogether.common.Common.ROOMID;
+import static com.example.meetingtogether.common.Common.ROOM_NAME;
 import static com.example.meetingtogether.common.Common.VIDEO;
 import static com.example.meetingtogether.common.Common.WHITE_BOARD;
 
@@ -28,6 +31,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.PointF;
+import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.graphics.drawable.AnimationDrawable;
@@ -86,6 +90,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
+import org.webrtc.CameraVideoCapturer;
 import org.webrtc.CapturerObserver;
 import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
@@ -157,11 +162,13 @@ import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
+import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.ColorType;
 import com.example.meetingtogether.common.Common;
 import com.example.meetingtogether.common.CommonRecyclerView;
 import com.example.meetingtogether.common.MessageRecyclerView;
+import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
 import com.example.meetingtogether.databinding.FragmentMeetingRoomChatBinding;
 import com.example.meetingtogether.databinding.FragmentPeersBinding;
@@ -169,12 +176,17 @@ import com.example.meetingtogether.databinding.FragmentWhiteboardBinding;
 import com.example.meetingtogether.databinding.PlainRowItemBinding;
 import com.example.meetingtogether.databinding.ReceiveMessageRowItemBinding;
 import com.example.meetingtogether.databinding.SendMessageRowItemBinding;
+import com.example.meetingtogether.model.User;
+import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.FileInfo;
 import com.example.meetingtogether.retrofit.RetrofitInterface;
 import com.example.meetingtogether.retrofit.RetrofitResponse;
+import com.example.meetingtogether.retrofit.RetrofitService;
 import com.example.meetingtogether.services.MeetingService;
 import com.example.meetingtogether.services.TestService;
+import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
 import com.example.meetingtogether.ui.meetings.DTO.ColorModel;
+import com.example.meetingtogether.ui.meetings.DTO.MeetingDTO;
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingRoomChatFragment;
@@ -183,6 +195,7 @@ import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
 import com.example.meetingtogether.ui.meetings.DTO.UserModel;
 import com.example.meetingtogether.ui.meetings.google.Camera2Capturer;
 import com.example.meetingtogether.ui.meetings.google.CameraCaptureInterface;
+import com.example.meetingtogether.ui.user.LoginActivity;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -200,8 +213,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public static final String TAG = "TEST";
     public static final String VIDEO_TRACK_ID = "ARDAMSv0";
     public static final String SCREEN_TRACK_ID = "ARDAMSv0";
-    public static final int VIDEO_RESOLUTION_WIDTH = 1280;
-    public static final int VIDEO_RESOLUTION_HEIGHT = 720;
+    public static final int VIDEO_RESOLUTION_WIDTH = 1440;
+    public static final int VIDEO_RESOLUTION_HEIGHT = 1080;
     public static final int FPS = 30;
 
     private static final String VIDEO_FLEXFEC_FIELDTRIAL =
@@ -251,7 +264,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     // 미팅 서비스 바운드 여부
     private boolean isMeetingServiceBound = false;
-    private boolean isTestServiceBound = false;
+    private boolean isMediaServiceBound = false;
 
     // 미팅 서비스
     public static MeetingService meetingService;
@@ -285,6 +298,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private FragmentPeersBinding peersBinding;
     private FragmentWhiteboardBinding whiteboardBinding;
     private String roomId;
+    private String roomName;
+    private String host;
+    private boolean isActivateCamera = false;
+    private boolean isFront = true;
 
     private MeetingRoomChatFragment meetingRoomChatFragment;
     private FragmentMeetingRoomChatBinding meetingRoomChatBinding;
@@ -376,9 +393,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     });
 
     private void fragAndSocketSetting(){
-        // 테스트 서비스 바인드 시작
+        // 미팅 서비스 바인드 시작
         Intent intent = new Intent(MeetingRoomActivity.this, TestService.class);
-        bindService(intent, testServiceConn, Context.BIND_AUTO_CREATE);
+        bindService(intent, mediaServiceConn, Context.BIND_AUTO_CREATE);
 
         // 프래그먼트들 세팅
         fragmentsSetting();
@@ -495,8 +512,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     // ViewBind 연동
                     @Override
                     public void onBindViewListener(MessageRecyclerView.MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType) {
-                        Log.d(TAG, "viewHolder:" + viewHolder);
-                        Log.d(TAG, "view:" + view);
+//                        Log.d(TAG, "viewHolder:" + viewHolder);
+//                        Log.d(TAG, "view:" + view);
                         if (viewType == MessageModel.MessageType.RECEIVE.getValue()) {
                             viewHolder.setReceiveBinding(ReceiveMessageRowItemBinding.bind(view));
                         } else {
@@ -989,12 +1006,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
         }
     };
 
-    public ServiceConnection testServiceConn = new ServiceConnection() {
+    public ServiceConnection mediaServiceConn = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             TestService.TestServiceBinder binder = (TestService.TestServiceBinder) service;
             testService = binder.getService();
-            isTestServiceBound = true;
+            isMediaServiceBound = true;
             Log.d(TAG, "바인드 받아옴");
 
             // 바로 미디어 프로젝션 세팅
@@ -1015,7 +1032,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         @Override
         public void onServiceDisconnected(ComponentName componentName) {
-            isTestServiceBound = false;
+            isMediaServiceBound = false;
         }
     };
 
@@ -1056,8 +1073,24 @@ public class MeetingRoomActivity extends AppCompatActivity {
         binding = ActivityMeetingRoomBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        roomId = getIntent().getStringExtra(ROOMID);
+        roomId = String.valueOf(getIntent().getIntExtra(ROOMID, -1));
 
+        if("-1".equals(roomId)){
+            Toast.makeText(MeetingRoomActivity.this, "잘못된 미팅방입니다.",Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        roomName = getIntent().getStringExtra(ROOM_NAME);
+        isActivateCamera = getIntent().getBooleanExtra(IS_ACTIVATE_CAMERA, false);
+        host = getIntent().getStringExtra(HOST);
+
+        // 방의 현재 인원수 수정
+        postCurrentClientUpdate(MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE.INCREASE);
+
+        binding.meetingTitle.setText(roomName);
+
+        /** 얼굴 마스크를 위한 세팅 */
         paint = new Paint();
         paint.setColor(Color.RED);
         paint.setAlpha(0xff);
@@ -1090,9 +1123,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 VideoTrack videoTrack = getCustomTrack(Common.VIDEO).getVideoTrack();
                 if (isVideoOn) {
                     videoTrack.setEnabled(false);
+
+                    binding.cameraImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
                     isVideoOn = false;
                 } else {
                     videoTrack.setEnabled(true);
+                    binding.cameraImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
                     isVideoOn = true;
                 }
             }
@@ -1104,9 +1140,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 AudioTrack audioTrack = getCustomTrack(Common.VIDEO).getAudioTrack();
                 if (isAudioOn) {
                     audioTrack.setEnabled(false);
+                    binding.audioImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
                     isAudioOn = false;
                 } else {
                     audioTrack.setEnabled(true);
+                    binding.audioImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
                     isAudioOn = true;
                 }
             }
@@ -1161,6 +1199,14 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        binding.swithCamera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                CustomCapturer customCapturer = getCustomVideoCapturer(VIDEO);
+                ((CameraVideoCapturer) customCapturer.getVideoCapturer()).switchCamera(null);
+            }
+        });
+
         /**
          * 얼굴 인식 옵션 초기화
          */
@@ -1189,6 +1235,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 .addConverterFactory(GsonConverterFactory.create(gson))
                 .build();
         service = retrofit.create(RetrofitInterface.class);
+
+        binding.exitButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                isClickBackBtn = true;
+                /**
+                 * 1. 나가는 인원이 호스트 라면, 다른 사람들에게 out하라는 소켓 메시지를 보낸다.
+                 * 2. 해당 방 DB를 삭제시킨다.
+                 */
+                if(Util.user.getId().equals(host)){
+                    // 방 삭제
+                    postCheckDeleteMeeting();
+                }else{
+                    // 방의 현재 인원수 수정
+                    postCurrentClientUpdate(MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE.DECREASE);
+                }
+            }
+        });
+
+        binding.testButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+            }
+        });
     }
 
     private int noCnt = 0;
@@ -1478,6 +1549,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
          */
         disconnect();
 
+        // 시스템 화면에 보이는 SurfaceView를 끈다.
         toggleMainSurfaceView(false);
 
         super.onDestroy();
@@ -1496,7 +1568,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         initializePeerConnectionFactory();
 
         // 캡처러 초기화
-        initializeCapturer(Common.VIDEO, null);
+        initializeCapturer(Common.VIDEO, null, true);
 
         // 트랙 생성
         CustomTrack customTrack = createTrack(Common.VIDEO);
@@ -1506,6 +1578,22 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         // 트랙과 view 연동
         bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
+
+        // 처음 들어올 때 화상회의 켰냐 안켰냐의 설정에 따라 설정
+        VideoTrack videoTrack = customTrack.getVideoTrack();
+        videoTrack.setEnabled(isActivateCamera);
+        isVideoOn = isActivateCamera;
+
+        if(isActivateCamera){
+            binding.cameraImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
+        }else{
+            binding.cameraImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
+        }
+
+        AudioTrack audioTrack = customTrack.getAudioTrack();
+        audioTrack.setEnabled(true);
+        isAudioOn = true;
+        binding.audioImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
 
         /** Remote View 를 위한 설정 */
         remoteProxySink = createProxySink("remoteLocal", Common.VIDEO);
@@ -1590,9 +1678,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     private void initializeCapturer(String type, CustomCapturer screenCapturer) {
+        initializeCapturer(type, screenCapturer, true);
+    }
+
+    private void initializeCapturer(String type, CustomCapturer screenCapturer, boolean isFront) {
         CustomCapturer customCapturer = null;
         if (Common.VIDEO.equals(type)) {
-            customCapturer = new CustomCapturer(type, MeetingRoomActivity.this);
+            customCapturer = new CustomCapturer(type, MeetingRoomActivity.this, isFront);
         } else if (Common.SCREEN.equals(type)) {
             customCapturer = screenCapturer;
         }
@@ -1875,6 +1967,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
             }).on("created", args -> {
                 Log.d(TAG, "[방 생성]");
+            }).on("host_out", args -> {
+                Log.d(TAG, "[호스트가 방에서 나갔습니다.]");
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MeetingRoomActivity.this, "[호스트가 방에서 나갔습니다.]", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                // window view 안나오게 하기 위해서는 back btn true로 설정해야한다.
+                isClickBackBtn = true;
+                finish();
             }).on("full", args -> {
                 Log.d(TAG, "[방이 가득 찼습니다.]");
             }).on("message", args -> {
@@ -1978,9 +2083,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             e.printStackTrace();
                             Log.e(TAG, e.getMessage());
                         }
-                        /**
-                         * [offer 받음]
-                         */
+                    /**
+                     * [offer 받음]
+                     */
                     } else if (type.equals("offer")) {
                         String tagFlag = getTagFlagString(senderId, peerType);
 
@@ -2014,9 +2119,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                         }
 
-                        /**
-                         * [answer 받음]
-                         */
+                    /**
+                     * [answer 받음]
+                     */
                     } else if (type.equals("answer")) {
                         String tagFlag = getTagFlagString(senderId, peerType);
 
@@ -2034,9 +2139,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                         Log.d(TAG, tagFlag + "answer remote 설정 완료");
 
-                        /**
-                         * [candidate 받음]
-                         */
+                    /**
+                     * [candidate 받음]
+                     */
                     } else if (type.equals("candidate")) {
                         String tagFlag = getTagFlagString(senderId, peerType);
 
@@ -2063,9 +2168,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         customPeerConnection.getPeerConnection().addIceCandidate(candidate);
                         Log.d(TAG, tagFlag + "ICE 피어에 추가 완료!!");
 
-                        /**
-                         * [share 받음]
-                         */
+                    /**
+                     * [share 받음]
+                     */
                     } else if ("share".equals(type)) {
                         if ("".equals(shareStatus) || shareStatus == null) return;
 
@@ -2083,9 +2188,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             });
                         }
 
-                        /**
-                         * [whiteboard]
-                         */
+                    /**
+                     * [whiteboard]
+                     */
                     } else if ("whiteboard".equals(type)) {
                         if ("".equals(whiteboardStatus) || whiteboardStatus == null) return;
 
@@ -2542,7 +2647,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 surfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
                 surfaceViewRenderer.setEnableHardwareScaler(true);
                 surfaceViewRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
-                surfaceViewRenderer.setMirror(false);
+                surfaceViewRenderer.setMirror(true);
 
                 /**
                  * [레이아웃 파라미터 생성]
@@ -2773,7 +2878,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         rootEglBase = EglBase.create();
         peersBinding.mainSurfaceView.init(rootEglBase.getEglBaseContext(), null);
         peersBinding.mainSurfaceView.setEnableHardwareScaler(true);
-        peersBinding.mainSurfaceView.setMirror(false);
+        peersBinding.mainSurfaceView.setMirror(true);
 
         peersBinding.mainSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
@@ -2805,7 +2910,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         remoteCustomSurfaceViewRenderer = new CustomSurfaceViewRenderer(MeetingRoomActivity.this);
         remoteCustomSurfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
         remoteCustomSurfaceViewRenderer.setEnableHardwareScaler(true);
-        remoteCustomSurfaceViewRenderer.setMirror(false);
+        remoteCustomSurfaceViewRenderer.setMirror(true);
     }
 
     private void initializePeerConnectionFactory() {
@@ -3334,9 +3439,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
 
             // 테스트 바인드 서비스 해제
-            if(isTestServiceBound){
-                unbindService(testServiceConn);
-                Log.d(TAG, "테스트 서비스 언바운드");
+            if(isMediaServiceBound){
+                unbindService(mediaServiceConn);
+                Log.d(TAG, "미디어 서비스 언바운드");
             }
 
             Intent intent = new Intent(this, MeetingService.class);
@@ -3365,7 +3470,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             windowManagerSetting();
         }else{
             WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-            if(remoteCustomSurfaceViewRenderer.getWindowToken() != null){
+            if(remoteCustomSurfaceViewRenderer != null && remoteCustomSurfaceViewRenderer.getWindowToken() != null){
                 windowManager.removeView(remoteCustomSurfaceViewRenderer);
             }
         }
@@ -3376,9 +3481,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        super.onBackPressed();
+        //super.onBackPressed();
         isClickBackBtn = true;
         Log.d(TAG, "onBackPressed");
+        Log.d(TAG, "뒤로가기 동작");
+        // super.onBackPressed();
     }
 
     private void windowManagerSetting(){
@@ -3549,4 +3656,59 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //            }
 //        }
     }
+
+    private void postCheckDeleteMeeting(){
+        MeetingDTO meetingDTO = new MeetingDTO();
+        meetingDTO.setId(Integer.parseInt(roomId));
+        meetingDTO.setHost(host);
+
+        Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postCheckDeleteMeeting(meetingDTO);
+        call.enqueue(new Callback<CommonRetrofitResponse>() {
+            @Override
+            public void onResponse(Call<CommonRetrofitResponse> call, Response<CommonRetrofitResponse> response) {
+                // 응답 처리
+                if (response.isSuccessful() && response.body().isResult()) {
+                    // 1. 소켓으로 호스트 나갔다고 알리기
+                    if(socket != null) socket.emit("host_out");
+
+                    finish();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<CommonRetrofitResponse> call, Throwable t) {
+                // 오류 처리
+                Log.d(TAG, t.getMessage());
+            }
+        });
+    }
+
+    private void postCurrentClientUpdate(MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE currentClientUpdateType){
+        MeetingDTO meetingDTO = new MeetingDTO();
+        meetingDTO.setId(Integer.parseInt(roomId));
+        meetingDTO.setCurrentClientUpdateType(currentClientUpdateType);
+
+        Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postCurrentClientUpdate(meetingDTO);
+        call.enqueue(new Callback<CommonRetrofitResponse>() {
+            @Override
+            public void onResponse(Call<CommonRetrofitResponse> call, Response<CommonRetrofitResponse> response) {
+                // 응답 처리
+                if (response.isSuccessful() && response.body().isResult()) {
+                    if(currentClientUpdateType == MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE.DECREASE){
+                        finish();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<CommonRetrofitResponse> call, Throwable t) {
+                // 오류 처리
+                Log.d(TAG, t.getMessage());
+                if(currentClientUpdateType == MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE.DECREASE){
+                    finish();
+                }
+            }
+        });
+    }
+
 }

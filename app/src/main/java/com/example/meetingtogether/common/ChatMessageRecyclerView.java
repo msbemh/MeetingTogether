@@ -9,11 +9,11 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
-import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
+import com.example.meetingtogether.model.MessageDTO;
 
 import java.util.List;
 
-public class MessageRecyclerView {
+public class ChatMessageRecyclerView {
     private List<?> dataList;
     private RecyclerView recyclerView;
     private Context context;
@@ -23,7 +23,7 @@ public class MessageRecyclerView {
     public int receiveRowItem;
     public int sendRowItem;
 
-    public MessageRecyclerView(OnBind onBind){
+    public ChatMessageRecyclerView(OnBind onBind){
         this.onBind = onBind;
     }
 
@@ -32,7 +32,7 @@ public class MessageRecyclerView {
      */
     public interface OnBind {
         void onBindViewListener(MyRecyclerAdapter.ViewHolder viewHolder, View view, int viewType);
-        void onBindViewHolderListener(MyRecyclerAdapter.ViewHolder holder, int position);
+        void onBindViewHolderListener(MyRecyclerAdapter.ViewHolder holder, int position, List<Object> payloads);
         void onLayout(Context context, RecyclerView recyclerView);
     }
 
@@ -106,6 +106,10 @@ public class MessageRecyclerView {
             this.dataList = dataList;
         }
 
+        public List<?> getDataList(){
+            return this.dataList;
+        }
+
         public class ViewHolder<T extends ViewBinding, F extends ViewBinding> extends RecyclerView.ViewHolder{
 
             public T sendBinding;
@@ -153,9 +157,9 @@ public class MessageRecyclerView {
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             View convertView = null;
-            if(viewType == MessageModel.MessageType.RECEIVE.getValue()){
+            if(viewType == MessageDTO.MessageType.RECEIVE.ordinal()){
                 convertView = LayoutInflater.from(parent.getContext()).inflate(receiveRowItem, parent,false);
-            }else if(viewType == MessageModel.MessageType.SEND.getValue()){
+            }else if(viewType == MessageDTO.MessageType.SEND.ordinal()){
                 convertView = LayoutInflater.from(parent.getContext()).inflate(sendRowItem, parent,false);
             }
             return new ViewHolder(convertView, viewType);
@@ -163,7 +167,12 @@ public class MessageRecyclerView {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            onBind.onBindViewHolderListener(holder, position);
+            onBind.onBindViewHolderListener(holder, position, null);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position, @NonNull List<Object> payloads) {
+            onBind.onBindViewHolderListener(holder, position, payloads);
         }
 
         @Override
@@ -173,11 +182,11 @@ public class MessageRecyclerView {
 
         @Override
         public int getItemViewType(int position) {
-            MessageModel messageModel = (MessageModel) dataList.get(position);
-            if(messageModel.getMessageType() == MessageModel.MessageType.RECEIVE){
-                return MessageModel.MessageType.RECEIVE.getValue();
-            }else if(messageModel.getMessageType() == MessageModel.MessageType.SEND){
-                return MessageModel.MessageType.SEND.getValue();
+            MessageDTO messageDTO = (MessageDTO) dataList.get(position);
+            if(messageDTO.getMessageType() == MessageDTO.MessageType.RECEIVE){
+                return MessageDTO.MessageType.RECEIVE.ordinal();
+            }else if(messageDTO.getMessageType() == MessageDTO.MessageType.SEND){
+                return MessageDTO.MessageType.SEND.ordinal();
             }
 
             return -1;

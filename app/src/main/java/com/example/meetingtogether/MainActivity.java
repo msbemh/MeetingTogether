@@ -1,11 +1,14 @@
 package com.example.meetingtogether;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,10 +17,13 @@ import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.example.meetingtogether.broadcast.BootReceiver;
 import com.example.meetingtogether.databinding.ActivityMainBinding;
 import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.services.ChatService;
 import com.example.meetingtogether.services.TestService;
+import com.example.meetingtogether.ui.chats.ChatRoomActivity;
+import com.example.meetingtogether.ui.chats.ChattingListFragment;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 import com.example.meetingtogether.ui.user.SignUpActivity;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -27,8 +33,13 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.navigation.NavController;
+import androidx.navigation.NavDestination;
 import androidx.navigation.Navigation;
+import androidx.navigation.fragment.FragmentNavigator;
+import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
@@ -41,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
 
     private String TAG = "TEST";
+    private NavController navController;
 
     /**
      * service
@@ -48,7 +60,8 @@ public class MainActivity extends AppCompatActivity {
      */
     private final String[] PERMISSIONS = {
             Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.FOREGROUND_SERVICE
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.RECEIVE_BOOT_COMPLETED
     };
 
     /**
@@ -117,6 +130,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static boolean isBound = false;
     public static ChatService mChatService;
+    public static NavHostFragment navHostFragment;
 
     public ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -125,7 +139,10 @@ public class MainActivity extends AppCompatActivity {
             mChatService = binder.getService();
             isBound = true;
 
-            /** 바인딩 이 완료 되면 서비스와 액티비티 인터페이스 설정 */
+            /**
+             * 바인딩 이 완료 되면 서비스와 액티비티 인터페이스 설정.
+             * 소켓도 연결 요청 됨
+             */
             setChatServiceInterface();
         }
         @Override
@@ -138,6 +155,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        /**
+         * 브로드 캐스트 등록
+         */
+        BroadcastReceiver br = new BootReceiver();
+        IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        filter.addAction(Intent.ACTION_SHUTDOWN);
+        filter.addAction(Intent.ACTION_REBOOT);
+        this.registerReceiver(br, filter);
+
+
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -147,17 +174,17 @@ public class MainActivity extends AppCompatActivity {
         AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                 R.id.navigation_user, R.id.navigation_chat, R.id.navigation_meeting)
                 .build();
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_activity_main);
+        navController = Navigation.findNavController(this, R.id.nav_host_fragment_activity_main);
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         NavigationUI.setupWithNavController(binding.navView, navController);
 
+        navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment_activity_main);
 
         permissionLauncher.launch(PERMISSIONS);
     }
 
     private void start(){
         /** 채팅 서비스 시작 */
-        // 테스트 서비스 바인드 시작
         Intent intent = new Intent(MainActivity.this, ChatService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
@@ -166,16 +193,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
         /** 메인 액비티비와 서비스를 바인딩 */
-        bindService(intent, connection, Context.BIND_AUTO_CREATE);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
+        if(!isBound){
+            bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        }
     }
 
     private void setChatServiceInterface(){
-        mChatService.setInterface(new ChatService.ChatServiceInterface() {
+        mChatService.setRoomListInterface(new ChatService.ChatServiceInterface() {
             @Override
             public void onReceived() {
 
@@ -193,8 +217,58 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onMessage(MessageDTO messageDTO) {
-                Toast.makeText(MainActivity.this, "메시지를 보낸게 완료 되었단다~~~",Toast.LENGTH_SHORT).show();
+                try{
+                    Fragment fragment = MainActivity.navHostFragment.getChildFragmentManager().getPrimaryNavigationFragment();
+                    // 현재 채팅방 리스트 화면이 띄워져 있다면 채팅방 리스트를 다시 읽어 들인다.
+                    if(MainActivity.hasFocus && fragment instanceof ChattingListFragment){
+                        ((ChattingListFragment) fragment).getRoomList();
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                    Log.e(TAG, e.getMessage());
+                }
+            }
+
+            @Override
+            public void onAlertMsg(String msg) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                        builder.setTitle("알림")
+                                .setMessage(msg)
+                                .setPositiveButton("확인", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialogInterface, int i) {
+
+                                    }
+                                })
+                                .create()
+                                .show();
+                    }
+                });
             }
         });
+    }
+
+    public static boolean hasFocus = false;
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        hasFocus = true;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        hasFocus = false;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+//        mChatService.setRoomListInterface(null);
+//        if(connection != null) unbindService(connection);
     }
 }

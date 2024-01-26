@@ -47,4 +47,5 @@ public class RetrofitService {
     public RetrofitInterface getService() {
         return service;
     }
+
 }

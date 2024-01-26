@@ -1,6 +1,7 @@
 package com.example.meetingtogether.ui.users;
 
 import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
+import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
 import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_TYPE_ID;
 
@@ -49,6 +50,8 @@ public class ProfileActivity extends AppCompatActivity {
     private AlertDialog.Builder builder;
     private String userId;
     private String friendId;
+    private String friendName;
+    private int roomId;
     private String profileImagePath;
     private String backgroundImagePath;
 
@@ -123,7 +126,9 @@ public class ProfileActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         userId = intent.getStringExtra("userId");
+        roomId = intent.getIntExtra("roomId", -1);
         friendId = intent.getStringExtra("friendId");
+        friendName = intent.getStringExtra("friendName");
 
         // 친구의 경우
         if(friendId != null){
@@ -269,9 +274,10 @@ public class ProfileActivity extends AppCompatActivity {
                 Intent intent = new Intent(ProfileActivity.this, ChatRoomActivity.class);
 
                 // 해당 방 번호, 방 유형, 상대방 Id 를 넘겨준다.
-                intent.putExtra(ROOMID, -1);
-                intent.putExtra(ROOM_TYPE_ID, MessageDTO.RoomType.INDIVIDUAL);
-                intent.putExtra(OTHER_USER_ID, "test@naver.com");
+                intent.putExtra(ROOMID, roomId);
+                intent.putExtra(ROOM_TYPE_ID, MessageDTO.RoomType.INDIVIDUAL.name());
+                intent.putExtra(OTHER_USER_ID, friendId);
+                intent.putExtra(OTHER_USER_NAME, friendName);
 
                 startActivity(intent);
             }

@@ -28,6 +28,8 @@ public class ChatRoomListDTO {
     private String roomName;
     @SerializedName("room_type")
     private String roomType;
+    @SerializedName("user_cnt")
+    private int userCnt;
 
 
     public String getFriendId() {

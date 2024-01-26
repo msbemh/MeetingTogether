@@ -37,8 +37,14 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         // Shared Preference 초기화
-        SharedPreferenceRepository.pref = getSharedPreferences("pref", Activity.MODE_PRIVATE);
-        SharedPreferenceRepository.editor = pref.edit();
+        if(SharedPreferenceRepository.gson == null){
+            SharedPreferenceRepository.init();
+        }
+        if(SharedPreferenceRepository.pref == null){
+            SharedPreferenceRepository.pref = getSharedPreferences("pref", Activity.MODE_PRIVATE);
+            SharedPreferenceRepository.editor = pref.edit();
+        }
+
 
         // 사용자 정보 불러오기
         Util.user = SharedPreferenceRepository.getUser();

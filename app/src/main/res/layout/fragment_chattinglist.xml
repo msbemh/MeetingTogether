@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/fragment_chattinglist"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".ui.chats.ChattingListFragment">
 
     <LinearLayout
         android:id="@+id/linearLayout"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
         android:layout_marginLeft="10dp"
-        android:padding="5dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginRight="10dp"
         android:background="@drawable/border"
+        android:padding="5dp"
+        app:layout_constraintEnd_toStartOf="@+id/add_group_chat_room"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -21,8 +25,8 @@
             android:id="@+id/search_btn"
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:layout_margin="10dp"
             android:padding="5dp"
-            android:layout_margin="5dp"
             android:scaleType="centerCrop"
             android:src="@drawable/search"
             app:layout_constraintStart_toStartOf="parent"
@@ -31,8 +35,10 @@
 
         <EditText
             android:id="@+id/search_edit"
-            android:layout_width="200dp"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:layout_weight="1"
             android:ems="10"
             android:hint="사용자 검색"
             android:inputType="textPersonName"
@@ -46,26 +52,13 @@
         android:layout_width="40dp"
         android:layout_height="50dp"
         android:backgroundTint="@color/basic"
-        android:text="+"
         android:layout_marginRight="10dp"
+        android:text="+"
         android:textColor="@color/black"
         android:textStyle="bold|normal"
         app:layout_constraintBottom_toBottomOf="@+id/linearLayout"
-        app:layout_constraintEnd_toStartOf="@+id/refresh_btn"
-        app:layout_constraintTop_toTopOf="@+id/linearLayout" />
-
-    <ImageView
-        android:id="@+id/refresh_btn"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_margin="5dp"
-        android:layout_marginRight="10dp"
-        android:padding="5dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/refresh"
-        app:layout_constraintBottom_toBottomOf="@+id/add_group_chat_room"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/add_group_chat_room" />
+        app:layout_constraintTop_toTopOf="@+id/linearLayout" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/user_list_recyclerview"

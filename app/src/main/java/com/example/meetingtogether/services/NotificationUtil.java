@@ -12,5 +12,7 @@ public class NotificationUtil {
 
     public static final int NOTIFICATION_CHAT_ID = 3;
     public static final String CHAT_CHANNEL_ID = "CHAT_CHANNEL_ID";
+    public static final int NOTIFICATION_CHAT_MESSAGE_ID = 4;
+    public static final String CHAT_MESSAGE_CHANNEL_ID = "CHAT_MESSAGE_CHANNEL_ID";
 
 }

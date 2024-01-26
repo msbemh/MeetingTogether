@@ -5,6 +5,7 @@ import android.util.Log;
 
 import com.example.meetingtogether.common.Common;
 import com.example.meetingtogether.ui.meetings.google.Camera2Enumerator;
+import com.example.meetingtogether.ui.meetings.google.Camera2Enumerator;
 
 import org.webrtc.AudioSource;
 import org.webrtc.CameraVideoCapturer;
@@ -24,13 +25,23 @@ public class CustomCapturer {
         this.context = context;
 
         if(Common.VIDEO.equals(type)){
-            this.videoCapturer = createVideoCapturer();
+            this.videoCapturer = createVideoCapturer(true);
         }
     }
 
-    private VideoCapturer createVideoCapturer() {
+    public CustomCapturer(String type, Context context, boolean isFront) {
+        this.type = type;
+        this.context = context;
+
+        if(Common.VIDEO.equals(type)){
+            this.videoCapturer = createVideoCapturer(isFront);
+        }
+    }
+
+    public VideoCapturer createVideoCapturer(boolean isFront) {
         VideoCapturer videoCapturer;
-        videoCapturer = createCameraCapturer(new Camera2Enumerator(context));
+        videoCapturer = createCameraCapturer(new Camera2Enumerator(context), isFront);
+
 //        if (useCamera2()) {
 //            videoCapturer = createCameraCapturer(new CustomCamera2Enumerator(context));
 //        } else {
@@ -39,11 +50,11 @@ public class CustomCapturer {
         return videoCapturer;
     }
 
-    private VideoCapturer createCameraCapturer(Camera2Enumerator enumerator) {
+    private VideoCapturer createCameraCapturer(Camera2Enumerator enumerator, boolean isFront) {
         final String[] deviceNames = enumerator.getDeviceNames();
 
         for (String deviceName : deviceNames) {
-            if (enumerator.isFrontFacing(deviceName)) {
+            if (isFront ? enumerator.isFrontFacing(deviceName) : enumerator.isBackFacing(deviceName)) {
                 VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, new CameraVideoCapturer.CameraEventsHandler() {
 
                     @Override

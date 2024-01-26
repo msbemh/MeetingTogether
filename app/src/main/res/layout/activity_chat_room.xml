@@ -26,7 +26,7 @@
             android:src="@drawable/close" />
 
         <TextView
-            android:id="@+id/textView6"
+            android:id="@+id/chat_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -36,7 +36,7 @@
             android:textSize="20sp" />
 
         <ImageView
-            android:id="@+id/deleteButton"
+            android:id="@+id/testButton"
             android:layout_width="60dp"
             android:layout_height="match_parent"
             android:padding="20dp"
@@ -46,15 +46,17 @@
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/meetingRoomChatRecyclerView"
+        android:id="@+id/roomChatRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:background="#9bbbd4"
         android:paddingBottom="10dp"
         app:layout_constraintBottom_toTopOf="@+id/linearlayout"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/linearLayout" />
+        app:layout_constraintTop_toBottomOf="@+id/linearLayout"
+        app:layout_constraintVertical_bias="0.0" />
 
     <LinearLayout
         android:id="@+id/linearlayout"

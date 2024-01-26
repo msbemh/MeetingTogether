@@ -32,6 +32,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewbinding.ViewBinding;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
@@ -83,6 +84,8 @@ public class UserListFragment extends Fragment {
     private final String[] PERMISSIONS = {
             android.Manifest.permission.READ_CONTACTS
     };
+
+
 
     /**
      * 권한 요청에 대한 Callback
@@ -195,8 +198,8 @@ public class UserListFragment extends Fragment {
             @Override
             public void afterTextChanged(Editable editable) {
                 String searchText = binding.searchEdit.getText().toString();
-                searchFilter(searchText);
-
+                CommonRecyclerView.MyRecyclerAdapter adapter = (CommonRecyclerView.MyRecyclerAdapter) binding.userListRecyclerview.getAdapter();
+                adapter.getFilter().filter(searchText);
             }
         });
 
@@ -218,13 +221,16 @@ public class UserListFragment extends Fragment {
             // 실제 View 와 데이터 연동
             @Override
             public void onBindViewHolderListener(CommonRecyclerView.MyRecyclerAdapter.ViewHolder holder, int position) {
+                CommonRecyclerView.MyRecyclerAdapter adapter = (CommonRecyclerView.MyRecyclerAdapter) binding.userListRecyclerview.getAdapter();
+                List<Contact> filteredList = (List<Contact>) adapter.getFilteredList();
+
                 UserRowItemBinding binding = (UserRowItemBinding)(holder.binding);
-                binding.profileName.setText(dataList.get(position).getFriendName());
+                binding.profileName.setText(filteredList.get(position).getFriendName());
 
                 String imgPath = null;
                 // 프로필 이미지만 필터링
-                if(dataList.get(position).getFriendImgPaths().size() > 0) {
-                    ProfileMap userProfileMap = dataList.get(position).getFriendImgPaths().stream().filter(profileMap -> profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())).findFirst().orElse(null);
+                if(filteredList.get(position).getFriendImgPaths().size() > 0) {
+                    ProfileMap userProfileMap = filteredList.get(position).getFriendImgPaths().stream().filter(profileMap -> profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())).findFirst().orElse(null);
                     if(userProfileMap != null){
                         imgPath = userProfileMap.getProfileImgPath();
                     }
@@ -255,10 +261,16 @@ public class UserListFragment extends Fragment {
         // 리사이클러뷰 클릭 이벤트
         commonRecyclerView.setOnItemClickListener(new CommonRecyclerView.OnItemClickInterface() {
             @Override
-            public void onItemClickListener(View view, int position) {
+            public void onItemClickListener(View view, int position, ViewBinding pBinding) {
                 Intent intent = new Intent(getActivity(), ProfileActivity.class);
                 String friendId = Util.contactList.get(position).getFriendId();
+                String friendName = Util.contactList.get(position).getFriendName();
+
+                int roomId = Util.contactList.get(position).getRoomId();
+
+                intent.putExtra("roomId", roomId);
                 intent.putExtra("friendId", friendId);
+                intent.putExtra("friendName", friendName);
                 startActivity(intent);
             }
             @Override
@@ -345,7 +357,7 @@ public class UserListFragment extends Fragment {
                 // 오류 처리
                 Log.d(TAG, t.getMessage());
                 Util.hideDialog();
-                Toast.makeText(getActivity(), "로그인에 실패했습니다.",Toast.LENGTH_SHORT).show();
+                Toast.makeText(getActivity(), "친구목록 동기화에 실패했습니다.",Toast.LENGTH_SHORT).show();
             }
         });
     }

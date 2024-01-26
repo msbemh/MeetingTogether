@@ -5,11 +5,14 @@ import android.util.Log;
 
 import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
+import com.example.meetingtogether.retrofit.LocalDateTimeDeserializer;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONObject;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,6 +20,13 @@ public class SharedPreferenceRepository {
     private static final String TAG = SharedPreferenceRepository.class.getSimpleName();
     public static SharedPreferences pref;                     // 프리퍼런스
     public static SharedPreferences.Editor editor;            // 에디터
+    public static Gson gson;
+
+    public static void init(){
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer());
+        gson = gsonBuilder.create();
+    }
 
     /**
      * 자동 로그인을 위해서
@@ -24,7 +34,6 @@ public class SharedPreferenceRepository {
      */
     public static void saveUserForAutoLogin(User user){
         try {
-            Gson gson = new Gson();
             String json = gson.toJson(user);
 
             Log.d(TAG, "json:" + json);
@@ -38,7 +47,6 @@ public class SharedPreferenceRepository {
 
     public static void saveFriendList(List<Contact> responseContactList){
         try {
-            Gson gson = new Gson();
             String json = gson.toJson(responseContactList);
 
             Log.d(TAG, "json:" + json);
@@ -55,7 +63,6 @@ public class SharedPreferenceRepository {
             String userJson = pref.getString("user", null);
             if(userJson == null) return null;
 
-            Gson gson = new Gson();
             User user = gson.fromJson(userJson, User.class);
 
             Log.d(TAG, "user:" + user);
@@ -71,7 +78,6 @@ public class SharedPreferenceRepository {
             String friendListJson = pref.getString("friendList", null);
             if(friendListJson == null) return new ArrayList<>();
 
-            Gson gson = new Gson();
             List<Contact> friendList = gson.fromJson(friendListJson, new TypeToken<ArrayList<Contact>>(){}.getType());
 
             Log.d(TAG, "friendList:" + friendList);

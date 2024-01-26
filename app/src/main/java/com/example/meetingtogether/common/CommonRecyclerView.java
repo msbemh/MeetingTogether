@@ -4,11 +4,15 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Filter;
+import android.widget.Filterable;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
+import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.ui.meetings.DTO.ChatRoomListDTO;
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 
 import java.util.ArrayList;
@@ -16,6 +20,7 @@ import java.util.List;
 
 public class CommonRecyclerView {
     private List<?> dataList;
+    private List<?> filteredList;
     private RecyclerView recyclerView;
     private Context context;
     private MyRecyclerAdapter adapter;
@@ -40,7 +45,7 @@ public class CommonRecyclerView {
      * Click Item Interface
      */
     public interface OnItemClickInterface{
-        void onItemClickListener(View view, int position);
+        void onItemClickListener(View view, int position, ViewBinding binding);
         void onItemLongClickListener(View view, int position);
     }
 
@@ -55,6 +60,7 @@ public class CommonRecyclerView {
 
     public void setDataList(List<?> dataList){
         this.dataList = dataList;
+        this.filteredList = dataList;
     }
 
     public void setRowItem(int rowItem){
@@ -65,29 +71,76 @@ public class CommonRecyclerView {
         this.onItemClickInterface = onItemClickInterface;
     }
 
-    public void adapt(){
+    public MyRecyclerAdapter adapt(){
         // 레이아웃 적용
         onBind.onLayout(context, recyclerView);
 
         // 어댑터 적용
         adapter = new MyRecyclerAdapter(dataList);
         recyclerView.setAdapter(adapter);
+
+        return adapter;
     }
 
-    public class MyRecyclerAdapter extends RecyclerView.Adapter<MyRecyclerAdapter.ViewHolder>{
+    public class MyRecyclerAdapter extends RecyclerView.Adapter<MyRecyclerAdapter.ViewHolder> implements Filterable {
 
         private List<?> dataList;
+        private List<?> filteredList;
 
         public void updateList(List<?> dataList){
             this.dataList = dataList;
+            this.filteredList = dataList;
         }
 
         public List<?> getDataList(){
             return dataList;
         }
+        public List<?> getFilteredList(){
+            return filteredList;
+        }
 
         public MyRecyclerAdapter(List<?> dataList){
             this.dataList = dataList;
+            this.filteredList = dataList;
+        }
+
+        @Override
+        public Filter getFilter() {
+            return new Filter() {
+                @Override
+                protected FilterResults performFiltering(CharSequence charSequence) {
+                    String query = charSequence.toString().toLowerCase();
+
+                    FilterResults results = new FilterResults();
+                    List<?> filteredData = new ArrayList<>();
+
+                    for (Object data : dataList) {
+                        if(data instanceof Contact){
+                            List<Contact> contactList =  ((List<Contact>) filteredData);
+                            Contact contact = (Contact) data;
+                            if(contact.getFriendName().toLowerCase().contains(query)){
+                                contactList.add(contact);
+                            }
+                        }else if(data instanceof ChatRoomListDTO){
+                            List<ChatRoomListDTO> contactList =  ((List<ChatRoomListDTO>) filteredData);
+                            ChatRoomListDTO contact = (ChatRoomListDTO) data;
+                            if(contact.getFriendName().toLowerCase().contains(query)){
+                                contactList.add(contact);
+                            }
+                        }
+                    }
+
+                    results.values = filteredData;
+                    results.count = filteredData.size();
+                    return results;
+                }
+
+                @Override
+                protected void publishResults(CharSequence charSequence, FilterResults filterResults) {
+                    filteredList = (List<?>) filterResults.values;
+                    notifyDataSetChanged();
+                }
+            };
         }
 
         public class ViewHolder<T extends ViewBinding> extends RecyclerView.ViewHolder{
@@ -105,7 +158,7 @@ public class CommonRecyclerView {
                         final int position = getBindingAdapterPosition();
                         if (position != RecyclerView.NO_POSITION) {
                             if(onItemClickInterface != null) {
-                                onItemClickInterface.onItemClickListener(view, position);
+                                onItemClickInterface.onItemClickListener(view, position, binding);
                             }
                         }
                     }
@@ -143,7 +196,7 @@ public class CommonRecyclerView {
 
         @Override
         public int getItemCount() {
-            return dataList.size();
+            return filteredList.size();
         }
 
     }

@@ -31,22 +31,28 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:name=".MyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:fullBackupContent="@xml/appsflyer_backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MeetingTogether"
         android:usesCleartextTraffic="true"
+        tools:replace="android:fullBackupContent"
         tools:targetApi="31">
         <activity
-            android:name=".ui.meetings.ParticipateMeetingActivity"
+            android:name=".ui.meetings.NewReserveMeetingActivity"
             android:theme="@style/Theme.MeetingTogether.NoActionBar"
             android:exported="false" />
+        <activity
+            android:name=".ui.meetings.ParticipateMeetingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
             android:name=".ui.meetings.NewMeetingActivity"
             android:exported="false"
@@ -83,6 +89,7 @@
             android:theme="@style/Theme.MeetingTogether.NoActionBar" />
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="false" />
         <activity
             android:name=".ui.user.SignUpActivity"
@@ -99,11 +106,33 @@
             android:name=".ui.user.LoginActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleInstance"
             android:theme="@style/Theme.MeetingTogether.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="loginactivity"
+                    android:scheme="com.song.meetingtogether" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="onelink-basic-app.onelink.me"
+                    android:pathPrefix="/H5hv"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
 
@@ -125,6 +154,18 @@
                 <action android:name="android.intent.action.ACTION_LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.example.meetingtogether.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+
+            <!-- ressource file to create -->
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
     </application>
 
 </manifest>

@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.users;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
@@ -52,7 +54,6 @@ import retrofit2.Response;
 public class ProfileDetailActivity extends AppCompatActivity {
 
     private ActivityProfileDetailBinding binding;
-    private String TAG = "TEST";
 
     private String userId;
     private String friendId;

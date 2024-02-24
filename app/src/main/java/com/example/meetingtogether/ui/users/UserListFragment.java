@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.users;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -73,8 +75,6 @@ public class UserListFragment extends Fragment {
 
     private FragmentUserlistBinding binding;
 
-    private String TAG = "TEST";
-
     private List<Contact> dataList;
     private UserRowItemBinding userRowItemBinding;
 
@@ -84,8 +84,6 @@ public class UserListFragment extends Fragment {
     private final String[] PERMISSIONS = {
             android.Manifest.permission.READ_CONTACTS
     };
-
-
 
     /**
      * 권한 요청에 대한 Callback

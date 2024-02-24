@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.users;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -78,7 +80,6 @@ import retrofit2.Response;
 public class ProfileEditActivity extends AppCompatActivity {
 
     private ActivityProfileEditBinding binding;
-    private String TAG = "TEST";
 
     private CustomDialog customDialog;
 

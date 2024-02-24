@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+import static com.example.meetingtogether.MainActivity.mChatService;
 import static com.example.meetingtogether.common.Common.CHAT;
 import static com.example.meetingtogether.common.Common.HOST;
 import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
@@ -8,6 +10,7 @@ import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_NAME;
 import static com.example.meetingtogether.common.Common.VIDEO;
 import static com.example.meetingtogether.common.Common.WHITE_BOARD;
+import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.gson;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -15,6 +18,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.PendingIntent;
 import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -140,6 +144,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.stream.Collectors;
 
 import io.socket.client.IO;
 import io.socket.client.Socket;
@@ -173,9 +178,14 @@ import com.example.meetingtogether.databinding.ActivityMeetingRoomBinding;
 import com.example.meetingtogether.databinding.FragmentMeetingRoomChatBinding;
 import com.example.meetingtogether.databinding.FragmentPeersBinding;
 import com.example.meetingtogether.databinding.FragmentWhiteboardBinding;
+import com.example.meetingtogether.databinding.MeetingRowItemBinding;
 import com.example.meetingtogether.databinding.PlainRowItemBinding;
 import com.example.meetingtogether.databinding.ReceiveMessageRowItemBinding;
 import com.example.meetingtogether.databinding.SendMessageRowItemBinding;
+import com.example.meetingtogether.dialogs.CustomDialog;
+import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.model.MessageDTO;
+import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.FileInfo;
@@ -190,17 +200,22 @@ import com.example.meetingtogether.ui.meetings.DTO.MeetingDTO;
 import com.example.meetingtogether.ui.meetings.DTO.MessageModel;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment;
 import com.example.meetingtogether.ui.meetings.fragments.MeetingRoomChatFragment;
+import com.example.meetingtogether.ui.meetings.fragments.MeetingUserListDialogFragment;
 import com.example.meetingtogether.ui.meetings.fragments.PeersFragment;
 import com.example.meetingtogether.ui.meetings.fragments.WhiteboardFragment;
 import com.example.meetingtogether.ui.meetings.DTO.UserModel;
 import com.example.meetingtogether.ui.meetings.google.Camera2Capturer;
 import com.example.meetingtogether.ui.meetings.google.CameraCaptureInterface;
 import com.example.meetingtogether.ui.user.LoginActivity;
+import com.example.meetingtogether.ui.users.ProfileDetailActivity;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.reflect.TypeToken;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
 import com.google.mlkit.vision.face.FaceContour;
@@ -210,7 +225,6 @@ import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.google.mlkit.vision.face.FaceLandmark;
 
 public class MeetingRoomActivity extends AppCompatActivity {
-    public static final String TAG = "TEST";
     public static final String VIDEO_TRACK_ID = "ARDAMSv0";
     public static final String SCREEN_TRACK_ID = "ARDAMSv0";
     public static final int VIDEO_RESOLUTION_WIDTH = 1440;
@@ -297,8 +311,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private WhiteboardFragment whiteboardFragment;
     private FragmentPeersBinding peersBinding;
     private FragmentWhiteboardBinding whiteboardBinding;
-    private String roomId;
-    private String roomName;
+    public String roomId;
+    public String roomName;
     private String host;
     private boolean isActivateCamera = false;
     private boolean isFront = true;
@@ -338,6 +352,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     private Retrofit retrofit;
     private RetrofitInterface service;
+    private MeetingUserListDialogFragment meetingUserListDialogFragment;
 
     /**
      * service
@@ -1083,7 +1098,36 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         roomName = getIntent().getStringExtra(ROOM_NAME);
         isActivateCamera = getIntent().getBooleanExtra(IS_ACTIVATE_CAMERA, false);
-        host = getIntent().getStringExtra(HOST);
+
+        /**
+         * 호스트 데이터 가져오기
+         * 실제 호스트 데이터와 현재 유저가 일치할 경우에만 host에 값을 넣어주자.
+         */
+        Integer roomIdInt = Integer.valueOf(roomId);
+        Call<MeetingDTO> call = RetrofitService.getInstance().getService().getMeetingHostInfo(roomIdInt);
+        call.enqueue(new Callback<MeetingDTO>() {
+            @Override
+            public void onResponse(Call<MeetingDTO> call, Response<MeetingDTO> response) {
+                // 응답 처리
+                if (response.isSuccessful()) {
+                    MeetingDTO meetingDTO = response.body();
+                    Log.d(TAG, "meetingDTO:" + meetingDTO);
+                    if(Util.user.getId().equals(meetingDTO.getHost())){
+                        host = meetingDTO.getHost();
+                    }
+                }
+                Log.d(TAG, response.message());
+                /** 미팅 권한 launch */
+                meetingPermissionLauncher.launch(MEETING_PERMISSIONS);
+            }
+            @Override
+            public void onFailure(Call<MeetingDTO> call, Throwable t) {
+                // 오류 처리
+                Log.d(TAG, t.getMessage());
+            }
+        });
+
+        //host = getIntent().getStringExtra(HOST);
 
         // 방의 현재 인원수 수정
         postCurrentClientUpdate(MeetingDTO.CURRENT_CLIENT_UPDATE_TYPE.INCREASE);
@@ -1114,8 +1158,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
         HandlerThread handlerChatThread = new HandlerThread("chatThread");
         handlerChatThread.start();
         chatHandler = new Handler(handlerChatThread.getLooper());
-
-        meetingPermissionLauncher.launch(MEETING_PERMISSIONS);
 
         binding.cameraOnOffButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -1207,6 +1249,15 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        // 참가자 리스트
+        binding.userListButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "userList:" + userList);
+                showUserListDialog();
+            }
+        });
+
         /**
          * 얼굴 인식 옵션 초기화
          */
@@ -1244,7 +1295,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
                  * 1. 나가는 인원이 호스트 라면, 다른 사람들에게 out하라는 소켓 메시지를 보낸다.
                  * 2. 해당 방 DB를 삭제시킨다.
                  */
-                if(Util.user.getId().equals(host)){
+                UserModel host = MeetingRoomActivity.this.userList.stream().filter(userModel -> userModel.isHost()).findFirst().orElse(null);
+                String hostEmail = null;
+                if(host != null){
+                    hostEmail = host.getEmail();
+                }
+                if(Util.user.getId().equals(hostEmail)){
                     // 방 삭제
                     postCheckDeleteMeeting();
                 }else{
@@ -1254,12 +1310,6 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
-        binding.testButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-
-            }
-        });
     }
 
     private int noCnt = 0;
@@ -1405,6 +1455,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     public void replaceFragment(Fragment fragment) {
+        if(this.isFinishing() || this.isDestroyed()){
+            return;
+        }
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
 
@@ -1939,7 +1992,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
             socket.on(EVENT_CONNECT, args -> {
                 Log.d(TAG, "[소켓연결]");
 //                Log.d(TAG, "[소켓에서 스레드 네임]" + Thread.currentThread().getName());
-                socket.emit("join", roomId);
+
+                MeetingDTO meetingDTO = new MeetingDTO();
+                meetingDTO.setId(Integer.valueOf(roomId));
+                meetingDTO.setUser(Util.user);
+                // host 정보가 있을 때만 서버로 host정보 보내준다.
+                if(host != null && !"".equals(host)) meetingDTO.setHost(host);
+
+                String jsonString = gson.toJson(meetingDTO);
+
+                socket.emit("join", jsonString);
             }).on("bye", args -> {
                 JSONObject message = (JSONObject) args[0];
                 String clientId = message.optString("id");
@@ -1980,6 +2042,47 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 // window view 안나오게 하기 위해서는 back btn true로 설정해야한다.
                 isClickBackBtn = true;
                 finish();
+            }).on("host_change", args -> {
+                Log.d(TAG, "[호스트가 변경 됐습니다]");
+                JSONArray jsonArray = (JSONArray) args[0];
+                String jsonString = jsonArray.toString();
+
+                List<User> userList = gson.fromJson(jsonString, new TypeToken<List<User>>(){}.getType());
+                List<UserModel> userModelList = new ArrayList<>();
+                // 모든 사용자 리스트에 대해서 프로필 이미지 경로를 가져와서 세팅해주자
+                a:for(User user : userList){
+                    UserModel newUserModel = new UserModel();
+                    newUserModel.setHost(user.isHost());
+                    newUserModel.setEmail(user.getId());
+                    if(user.getProfileImgPaths() != null){
+                        // 제일 먼저 발경 되는 프로필 이미지 경로를 가져온다.
+                        b:for(ProfileMap profileMap : user.getProfileImgPaths()){
+                            if(profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())){
+                                newUserModel.setImgPath(profileMap.getProfileImgPath());
+                                break b;
+                            }
+                        }
+                    }
+                    newUserModel.setName(user.getName());
+                    newUserModel.setProfileImgPaths(user.getProfileImgPaths());
+                    newUserModel.setClientId(user.getClientId());
+                    userModelList.add(newUserModel);
+                }
+                MeetingRoomActivity.this.userList = userModelList;
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        UserModel host = MeetingRoomActivity.this.userList.stream().filter(userModel -> userModel.isHost()).findFirst().orElse(null);
+                        String hostName = null;
+                        if(host != null){
+                            hostName = host.getName();
+                        }
+                        Toast.makeText(MeetingRoomActivity.this, "호스트가 " + hostName + "님으로 변경 됐습니다.",Toast.LENGTH_LONG).show();
+                        if(meetingUserListDialogFragment != null) meetingUserListDialogFragment.update(userModelList);
+                    }
+                });
+
             }).on("full", args -> {
                 Log.d(TAG, "[방이 가득 찼습니다.]");
             }).on("message", args -> {
@@ -2008,6 +2111,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                      */
                     if (type.equals("userList")) {
                         try {
+                            if(socket == null) return;
+
                             String initiator = message.optString("initiator");
 
                             socketId = socket.id();
@@ -2028,6 +2133,21 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             for (int i = 0; i < jsonArray.length(); i++) {
                                 JSONObject userObj = (JSONObject) jsonArray.get(i);
                                 UserModel userModel = new UserModel(userObj.optString("clientId"));
+
+                                String profileImgPathsStr = userObj.optString("profileImgPaths");
+                                List<ProfileMap> profileImgPaths = gson.fromJson(profileImgPathsStr, new TypeToken<ArrayList<ProfileMap>>(){}.getType());
+                                String imgPath = null;
+                                if(profileImgPaths != null && profileImgPaths.size() > 0){
+                                    profileImgPaths = profileImgPaths.stream().filter(profileMap -> profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())).collect(Collectors.toList());
+                                    imgPath = profileImgPaths.get(0).getProfileImgPath();
+                                }
+
+                                boolean isHost = userObj.getBoolean("isHost");
+
+                                userModel.setImgPath(imgPath);
+                                userModel.setName(userObj.optString("name"));
+                                userModel.setEmail(userObj.optString("id"));
+                                userModel.setHost(isHost);
 
                                 if (!isExistUser(userModel.clientId)) {
                                     // 새로운 유저 추가
@@ -3662,6 +3782,30 @@ public class MeetingRoomActivity extends AppCompatActivity {
         meetingDTO.setId(Integer.parseInt(roomId));
         meetingDTO.setHost(host);
 
+        String jsonString = gson.toJson(meetingDTO);
+        RequestBody info = RequestBody.create(MediaType.parse("text/plain"), jsonString);
+
+        /** 해당 방의 모든 QR Code 이미지가 존재한다면 데이터와 이미지 삭제 */
+        Call<CommonRetrofitResponse> qrCall = RetrofitService.getInstance().getService().postPureDeleteImages(info);
+        qrCall.enqueue(new Callback<CommonRetrofitResponse>() {
+            @Override
+            public void onResponse(Call<CommonRetrofitResponse> call, Response<CommonRetrofitResponse> response) {
+                // 응답 처리
+                if (response.isSuccessful()) {
+                    // 방 삭제된 걸 소켓서비스(자바)로 알린다.
+                    MessageDTO sendMsgDTO = new MessageDTO();
+                    sendMsgDTO.setType(MessageDTO.RequestType.NOTIFY_MEETING_RESERVE_DELETED);
+                    mChatService.sendMsg(sendMsgDTO);
+                }
+                Log.d(TAG, response.message());
+            }
+            @Override
+            public void onFailure(Call<CommonRetrofitResponse> call, Throwable t) {
+                // 오류 처리
+                Log.d(TAG, t.getMessage());
+            }
+        });
+
         Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postCheckDeleteMeeting(meetingDTO);
         call.enqueue(new Callback<CommonRetrofitResponse>() {
             @Override
@@ -3709,6 +3853,59 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    public void showUserListDialog() {
+        FragmentManager fragmentManager = getSupportFragmentManager();
+        if(meetingUserListDialogFragment == null){
+            meetingUserListDialogFragment = new MeetingUserListDialogFragment(userList, new MeetingUserListDialogFragment.Listener() {
+                @Override
+                public void onClick(UserModel selectedUserModel) {
+                    UserModel me = MeetingRoomActivity.this.userList.stream().filter(userModel -> userModel.getEmail().equals(Util.user.getId())).findFirst().orElse(null);
+
+                    /** 사용자가 호스트일 경우에만 호스트 이관이 가능하다. */
+                    if(me.isHost()){
+                        // 이미 호스트를 선택한 경우
+                        if(selectedUserModel.isHost()){
+                            Toast.makeText(MeetingRoomActivity.this, "선택한 사용자는 이미 호스트입니다.", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        /**
+                         * [AlertDialog]
+                         * 호스트 이관 Dialog 띄우기
+                         */
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MeetingRoomActivity.this);
+                        builder.setMessage("호스트를 " + selectedUserModel.getName() +"님으로 변경 하시겠습니까?")
+                                .setTitle("확인")
+                                .setIcon(R.drawable.metting_together_logo);
+                        // 긍정 버튼
+                        builder.setPositiveButton("확인", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                // 호스트 이관
+                                Log.d(TAG, "[호스트 이관]" + selectedUserModel.getName() + "유저로 호스트 이관");
+                                MeetingDTO meetingDTO = new MeetingDTO();
+                                meetingDTO.setId(Integer.valueOf(roomId));
+                                meetingDTO.setUser(Util.user);
+                                meetingDTO.setHost(selectedUserModel.getEmail());
+
+                                String jsonString = gson.toJson(meetingDTO);
+                                socket.emit("host_change", jsonString);
+                            }
+                        });
+                        // 부정 버튼
+                        builder.setNegativeButton("취소", null);
+                        builder.show();
+                    }
+                }
+            });
+        }
+        // 프래그먼트가 생성 되어져 있고, 아직 isAdded 상태가 아닐 때만 show 시킨다
+        if(meetingUserListDialogFragment != null && !meetingUserListDialogFragment.isAdded()) {
+            meetingUserListDialogFragment.show(fragmentManager, "userListDialog");
+        }
+
     }
 
 }

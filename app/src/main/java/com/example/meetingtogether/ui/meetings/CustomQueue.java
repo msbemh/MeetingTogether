@@ -9,7 +9,6 @@ public class CustomQueue {
     private Queue<IceCandidate> queue;
     private String type;
     private String clientId;
-    private String TAG = "TEST";
 
     public CustomQueue(String clientId, String type) {
         this.queue = new LinkedList<>();

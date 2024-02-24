@@ -1,5 +1,6 @@
 package com.example.meetingtogether.ui.chats;
 
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
 import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
 import static com.example.meetingtogether.common.Common.ROOMID;
@@ -104,9 +105,6 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class ChatRoomActivity extends AppCompatActivity {
-
-    public static final String TAG = "TEST";
-
     private ActivityChatRoomBinding binding;
 
     public static ChatService mChatService;

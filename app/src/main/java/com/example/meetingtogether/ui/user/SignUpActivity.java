@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.user;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Context;
@@ -44,8 +46,6 @@ import retrofit2.Response;
 public class SignUpActivity extends AppCompatActivity {
 
     private ActivitySignUpBinding binding;
-
-    private static final String TAG = "TEST";
 
     private boolean isCompleteDupCheck = false;
     private boolean isAuthNumCheck = false;

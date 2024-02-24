@@ -100,6 +100,14 @@ public interface RetrofitInterface {
     @GET("check_exist_room")
     Call<MeetingDTO> checkExistRoom(@Query(value = "roomId") int roomId);
 
+    @Multipart
+    @POST("post_pure_upload_images")
+    Call<CommonRetrofitResponse> postPureUploadImages(@Part List<MultipartBody.Part> imageList, @Part("info")RequestBody requestBody);
 
+    @POST("post_pure_delete_images")
+    Call<CommonRetrofitResponse> postPureDeleteImages(@Body RequestBody requestBody);
+
+    @GET("get_meeting_host_info")
+    Call<MeetingDTO> getMeetingHostInfo(@Query(value = "roomId") int roomId);
 
 }

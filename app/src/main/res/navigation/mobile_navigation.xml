@@ -21,5 +21,11 @@
         android:id="@+id/navigation_meeting"
         android:name="com.example.meetingtogether.ui.meetings.fragments.MeetingListFragment"
         android:label="@string/title_meeting"
-        tools:layout="@layout/fragment_meetinglist" />
+        tools:layout="@layout/fragment_meetinglist">
+        <deepLink
+            android:id="@+id/deepLink"
+            app:action="android.intent.action.MY_ACTION"
+            app:mimeType="type/subtype"
+            app:uri="http://www.meetingtogether.com/{roomdId}?password={password}" />
+    </fragment>
 </navigation>

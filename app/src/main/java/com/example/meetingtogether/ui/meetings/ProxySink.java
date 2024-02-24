@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import org.webrtc.Logging;
 import org.webrtc.VideoFrame;
 import org.webrtc.VideoSink;
@@ -9,7 +11,6 @@ public class  ProxySink implements VideoSink {
     private VideoSink target;
     private String type;
     private String clientId;
-    private String TAG = "TEST";
     private VideoTrack videoTrack;
 
 

@@ -18,6 +18,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.example.meetingtogether.broadcast.BootReceiver;
+import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.ActivityMainBinding;
 import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.services.ChatService;
@@ -25,6 +26,7 @@ import com.example.meetingtogether.services.TestService;
 import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.chats.ChattingListFragment;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
+import com.example.meetingtogether.ui.user.LoginActivity;
 import com.example.meetingtogether.ui.user.SignUpActivity;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -51,7 +53,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
 
-    private String TAG = "TEST";
+    public static String TAG = "TEST_SONG";
+    public static String TAG_LIFE = "LIFE_TEST_SONG";
     private NavController navController;
 
     /**
@@ -154,6 +157,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onCreate");
+
+        // 사용자 데이터가 없다면 로그인 페이지로 이동
+        if(Util.user == null){
+            Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+            startActivity(intent);
+            finish();
+            return;
+        }
 
         /**
          * 브로드 캐스트 등록
@@ -268,6 +281,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onDestroy");
+
 //        mChatService.setRoomListInterface(null);
 //        if(connection != null) unbindService(connection);
     }

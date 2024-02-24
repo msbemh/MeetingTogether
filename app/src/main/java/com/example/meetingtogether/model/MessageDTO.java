@@ -92,7 +92,10 @@ public class MessageDTO {
         ROOM_CREATE,
         EXIT,
         OTHER_USER_MSG_RENEW,
-        IMAGE
+        IMAGE,
+        MEETING_RESERVE_NOTIFICATION,
+        NOTIFY_MEETING_RESERVE_CREATED,
+        NOTIFY_MEETING_RESERVE_DELETED
     }
 
     public enum MessageType{

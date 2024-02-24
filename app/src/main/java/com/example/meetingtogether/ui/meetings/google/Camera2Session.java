@@ -30,7 +30,6 @@ import org.webrtc.VideoFrame;
 
 @TargetApi(21)
 class Camera2Session implements CameraSession {
-    private static final String TAG = "Camera2Session";
 //    private static final Histogram camera2StartTimeMsHistogram = Histogram.createCounts("WebRTC.Android.Camera2.StartTimeMs", 1, 10000, 50);
 //    private static final Histogram camera2StopTimeMsHistogram = Histogram.createCounts("WebRTC.Android.Camera2.StopTimeMs", 1, 10000, 50);
 //    private static final Histogram camera2ResolutionHistogram;

@@ -1,5 +1,6 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
 import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_NAME;
@@ -100,7 +101,6 @@ public class ParticipateMeetingActivity extends AppCompatActivity {
 
     private ActivityParticipateMeetingBinding binding;
     private boolean isActivateCamera = false;
-    public static String TAG = "TEST";
     private MeetingDTO meetingDTO;
     /**
      * service

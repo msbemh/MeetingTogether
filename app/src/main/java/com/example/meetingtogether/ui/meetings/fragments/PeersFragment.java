@@ -1,6 +1,6 @@
 package com.example.meetingtogether.ui.meetings.fragments;
 
-import static com.example.meetingtogether.ui.meetings.MeetingRoomActivity.TAG;
+import static com.example.meetingtogether.MainActivity.TAG;
 
 import android.os.Bundle;
 import android.util.Log;

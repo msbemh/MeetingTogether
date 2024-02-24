@@ -1,5 +1,7 @@
 package com.example.meetingtogether.services;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -36,7 +38,6 @@ import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.VideoCapturer;
 
 public class MeetingService extends Service {
-    private String TAG = "TEST";
     private MediaProjectionManager mediaProjectionManager;
     private final IBinder mBinder = new MeetingServiceBinder();
     private NotificationCompat.Builder builder;

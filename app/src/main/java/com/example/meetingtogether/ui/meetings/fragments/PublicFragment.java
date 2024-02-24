@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings.fragments;
 
+import static com.example.meetingtogether.MainActivity.TAG_LIFE;
+
 import android.content.Context;
 import android.os.Bundle;
 
@@ -10,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -39,6 +42,8 @@ public class PublicFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
 
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onCreateView");
+
         binding = FragmentPublicBinding.inflate(inflater, container, false);
         return binding.getRoot();
     }
@@ -46,6 +51,8 @@ public class PublicFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onViewCreated");
 
         // 리사이클러뷰
         RecyclerView recyclerView = binding.publicRecyclerview;
@@ -100,8 +107,7 @@ public class PublicFragment extends Fragment {
             public void onItemClickListener(View view, int position, ViewBinding pBinding) {
                 List<MeetingDTO> meetingDTOS = (List<MeetingDTO>) adapter.getDataList();
                 MeetingDTO meetingDTO = meetingDTOS.get(position);
-
-                MeetingListFragment meetingListFragment = (MeetingListFragment) getParentFragment();
+                MeetingListFragment meetingListFragment = (MeetingListFragment) getActivity().getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment_activity_main).getChildFragmentManager().getPrimaryNavigationFragment();
                 meetingListFragment.connectToRoom(meetingDTO, false);
             }
             @Override
@@ -140,6 +146,9 @@ public class PublicFragment extends Fragment {
     @Override
     public void onDestroy() {
         super.onDestroy();
+
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onDestroy");
+
         binding = null;
     }
 

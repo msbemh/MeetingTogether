@@ -1,5 +1,6 @@
 package com.example.meetingtogether.services;
 
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.PEERS;
 import static com.example.meetingtogether.common.Common.VIDEO;
 import static com.example.meetingtogether.ui.meetings.MeetingRoomActivity.FPS;
@@ -87,7 +88,6 @@ import io.socket.client.Socket;
 import retrofit2.Retrofit;
 
 public class TestService extends Service {
-    private String TAG = "TEST";
     private final IBinder mBinder = new TestServiceBinder();
     private NotificationCompat.Builder builder;
     private Notification notification;

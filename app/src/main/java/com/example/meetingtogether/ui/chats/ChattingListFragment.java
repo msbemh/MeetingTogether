@@ -1,6 +1,7 @@
 package com.example.meetingtogether.ui.chats;
 
 import static android.app.Activity.RESULT_OK;
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
 import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
 import static com.example.meetingtogether.common.Common.ROOMID;
@@ -67,7 +68,6 @@ import retrofit2.Response;
 public class ChattingListFragment extends Fragment {
 
     private FragmentChattinglistBinding binding;
-    private String TAG = "TEST";
 
     private ChatRoomRowItemBinding chatRoomRowItemBinding;
     private Handler handler;
@@ -336,7 +336,7 @@ public class ChattingListFragment extends Fragment {
             public void onFailure(Call<List<ChatRoomListDTO>> call, Throwable t) {
                 // 오류 처리
                 Log.d(TAG, t.getMessage());
-                Toast.makeText(getActivity(), "채팅방 목록을 불러오는데 실패했습니다.",Toast.LENGTH_SHORT).show();
+//                Toast.makeText(getActivity(), "채팅방 목록을 불러오는데 실패했습니다.",Toast.LENGTH_SHORT).show();
             }
         });
     }

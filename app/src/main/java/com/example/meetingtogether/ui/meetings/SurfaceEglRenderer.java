@@ -13,7 +13,6 @@ import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 public class SurfaceEglRenderer extends CustomEglRenderer implements SurfaceHolder.Callback {
-    private static final String TAG = "SurfaceEglRenderer";
     private RendererCommon.RendererEvents rendererEvents;
     private final Object layoutLock = new Object();
     private boolean isRenderingPaused;

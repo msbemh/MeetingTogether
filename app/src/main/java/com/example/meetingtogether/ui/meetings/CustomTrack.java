@@ -7,7 +7,6 @@ public class CustomTrack {
     private VideoTrack videoTrack;
     private AudioTrack audioTrack;
     private String type;
-    private String tag = "TEST";
 
     public CustomTrack(String type) {
         this.type = type;

@@ -1,5 +1,7 @@
 package com.example.meetingtogether.services;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
 import static com.example.meetingtogether.common.Common.IS_PENDING;
 import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
 import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
@@ -75,8 +77,6 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class ChatService extends Service {
-
-    private String TAG = "TEST";
     private final IBinder mBinder = new ChatService.ChatServiceBinder();
     private NotificationCompat.Builder builder;
     private Notification notification;
@@ -252,6 +252,12 @@ public class ChatService extends Service {
                             // 아예 나가기
                             }else if(type == MessageDTO.RequestType.EXIT){
 //                        clientInterface.onExit(receiveMsgDTO);
+                            }else if(type == MessageDTO.RequestType.MEETING_RESERVE_NOTIFICATION){
+                                /**
+                                 * 예약 회의방 알림 메시지 출력
+                                 */
+                                showReserveNotification(receiveMsgDTO);
+
                             }
                         }
                     } catch (IOException e) {
@@ -319,6 +325,9 @@ public class ChatService extends Service {
             // 메시지 채널 생성
             createNotificationChannel(NotificationUtil.CHAT_MESSAGE_CHANNEL_ID);
 
+            // 예약 회의방 알림 채널 생성
+            createNotificationChannel(NotificationUtil.RESERVE_MEETING_MESSAGE_CHANNEL_ID);
+
             /**
              * [NotificationCompat.Builder]
              * 알림을 만들기 위해 사용되는 클래스
@@ -376,7 +385,7 @@ public class ChatService extends Service {
             NotificationChannel serviceChannel = new NotificationChannel(
                     channel,
                     channel,
-                    NotificationManager.IMPORTANCE_HIGH
+                    NotificationManager.IMPORTANCE_DEFAULT
             );
 
             NotificationManager manager = getSystemService(NotificationManager.class);
@@ -538,5 +547,59 @@ public class ChatService extends Service {
     public void setRoomId(int roomId) {
         Log.d(TAG, "[서비스] roomId를" + roomId + "로 업데이트");
         this.roomId = roomId;
+    }
+
+    private void showReserveNotification(MessageDTO messageDTO){
+        int roomId = messageDTO.getRoomUuid();
+        String roomName = messageDTO.getRoomName();
+
+        /**
+         * [NotificationCompat.Builder]
+         * 알림을 만들기 위해 사용되는 클래스
+         */
+        builder = new NotificationCompat.Builder(this, NotificationUtil.RESERVE_MEETING_MESSAGE_CHANNEL_ID);
+        builder.setContentTitle("[" + roomName + "] 예약 회의방 알림");
+        builder.setContentText("클릭하면 회의방으로 입장합니다.");
+        builder.setSmallIcon(R.mipmap.ic_launcher);
+        builder.setOngoing(true); // Swipe로 알림 삭제하는 기능 중지
+
+        /**
+         * Notification
+         * 컨텐츠 영역 클릭 Pending Intent
+         */
+        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
+
+        Intent firstIntent = new Intent(this, MainActivity.class);
+        stackBuilder.addNextIntent(firstIntent);
+
+        Intent contentIntent = new Intent(this, MeetingRoomActivity.class);
+//            contentIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+//        contentIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        contentIntent.putExtra(ROOMID, roomId);
+        contentIntent.putExtra(ROOM_NAME, roomName);
+        contentIntent.putExtra(IS_ACTIVATE_CAMERA, true);
+
+        stackBuilder.addNextIntent(contentIntent);
+
+        // PendingIntent 생성
+        PendingIntent pendingIntent =
+                stackBuilder.getPendingIntent(messageDTO.getId(), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        builder.setContentIntent(pendingIntent);
+        builder.setAutoCancel(true);
+
+        /**
+         * 권한 체크
+         */
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "권한 없음");
+            return;
+        }
+
+        /**
+         * 알림 표시
+         */
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.notify(messageDTO.getId(), builder.build());
     }
 }

@@ -26,7 +26,6 @@ import java.util.Map;
 
 @TargetApi(21)
 public class Camera2Enumerator implements CameraEnumerator {
-    private static final String TAG = "Camera2Enumerator";
     private static final double NANO_SECONDS_PER_SECOND = 1.0E9;
     private static final Map<String, List<CameraEnumerationAndroid.CaptureFormat>> cachedSupportedFormats = new HashMap();
     final Context context;

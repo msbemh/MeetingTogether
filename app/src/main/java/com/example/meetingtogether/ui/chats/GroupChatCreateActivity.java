@@ -1,5 +1,6 @@
 package com.example.meetingtogether.ui.chats;
 
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.OTHER_USER_ID;
 import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
 import static com.example.meetingtogether.common.Common.ROOMID;
@@ -55,7 +56,6 @@ public class GroupChatCreateActivity extends AppCompatActivity {
     private List<Contact> dataList;
     private UserRowSelectItemBinding userRowSelectItemBinding;
     private List<Contact> addDataList = new ArrayList<>();
-    private String TAG = "TEST";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

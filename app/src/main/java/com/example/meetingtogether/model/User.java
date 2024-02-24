@@ -13,7 +13,9 @@ public class User extends CommonModel{
     private String nickName;
     private String phoneNum;
     private String jwt;
+    private boolean isHost;
     private List<ProfileMap> profileImgPaths;
+    private String clientId;
 
     public User(String id, String password, String nickName, String phoneNum) {
         super();
@@ -115,4 +117,19 @@ public class User extends CommonModel{
         return phoneNum;
     }
 
+    public boolean isHost() {
+        return isHost;
+    }
+
+    public void setHost(boolean host) {
+        isHost = host;
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
 }

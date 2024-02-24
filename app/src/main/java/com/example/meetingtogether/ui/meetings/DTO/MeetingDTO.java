@@ -1,8 +1,11 @@
 package com.example.meetingtogether.ui.meetings.DTO;
 
+import com.example.meetingtogether.model.Contact;
+import com.example.meetingtogether.model.User;
 import com.google.gson.annotations.SerializedName;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class MeetingDTO {
 
@@ -38,9 +41,16 @@ public class MeetingDTO {
     @SerializedName("is_activate_camera")
     private boolean isActivateCamera;
 
+    @SerializedName("user")
+    private User user;
+
+    @SerializedName("reserve_contact_list")
+    private List<Contact> reserveContactList;
+
     public enum TYPE{
         PUBLIC,
-        PRIVATE
+        PRIVATE,
+        RESERVE
     }
 
     public enum CURRENT_CLIENT_UPDATE_TYPE{
@@ -134,5 +144,21 @@ public class MeetingDTO {
 
     public void setActivateCamera(boolean activateCamera) {
         isActivateCamera = activateCamera;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public List<Contact> getReserveContactList() {
+        return reserveContactList;
+    }
+
+    public void setReserveContactList(List<Contact> reserveContactList) {
+        this.reserveContactList = reserveContactList;
     }
 }

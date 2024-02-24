@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.chats;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
@@ -37,7 +39,6 @@ public class ChatImgViewActivity extends AppCompatActivity {
 
     private ActivityChatImgViewBinding binding;
     private Gson gson;
-    public static String TAG = "TEST";
 
     private List<FileInfo> fileInfoList;
     private List<SliderItem> sliderItems;

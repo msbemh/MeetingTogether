@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.util.Log;
 
 import org.webrtc.CandidatePairChangeEvent;
@@ -14,8 +16,6 @@ import org.webrtc.RtpTransceiver;
 import java.util.ArrayList;
 
 public class CustomPeerConnection {
-
-    private String TAG = "TEST";
     private Observer observer;
     private PeerConnection peerConnection;
     private String clientId;

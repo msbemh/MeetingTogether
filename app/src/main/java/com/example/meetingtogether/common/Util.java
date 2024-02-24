@@ -2,6 +2,8 @@ package com.example.meetingtogether.common;
 
 import static android.content.Context.TELEPHONY_SERVICE;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
@@ -26,6 +28,7 @@ import android.widget.RelativeLayout;
 
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
@@ -41,6 +44,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -58,8 +62,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
-    private static final String TAG = "TEST";
-
     public static int ACTION_CREATE = 0;
     public static int ACTION_EDIT = 1;
     public static int ACTION_DELETE = 2;
@@ -425,5 +427,6 @@ public class Util {
 
         return imgFile;
     }
+
 
 }

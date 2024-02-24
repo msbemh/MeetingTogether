@@ -1,5 +1,7 @@
 package com.example.meetingtogether.ui.meetings;
 
+import static com.example.meetingtogether.MainActivity.TAG;
+
 import android.content.Context;
 import android.util.Log;
 
@@ -15,7 +17,6 @@ import org.webrtc.VideoSource;
 public class CustomCapturer {
     private VideoCapturer videoCapturer;
     private String type;
-    private String TAG = "TEST";
     private VideoSource videoSource;
     private AudioSource audioSource;
     private Context context;

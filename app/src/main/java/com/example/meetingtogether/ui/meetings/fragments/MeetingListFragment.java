@@ -1,5 +1,8 @@
 package com.example.meetingtogether.ui.meetings.fragments;
 
+import static android.app.Activity.RESULT_OK;
+import static com.example.meetingtogether.MainActivity.TAG;
+import static com.example.meetingtogether.MainActivity.TAG_LIFE;
 import static com.example.meetingtogether.common.Common.HOST;
 import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
 import static com.example.meetingtogether.common.Common.ROOMID;
@@ -10,6 +13,8 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,16 +22,23 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentPagerAdapter;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
 
+import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.FragmentMeetinglistBinding;
+import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
 import com.example.meetingtogether.ui.chats.ChatImgViewActivity;
@@ -34,6 +46,7 @@ import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.meetings.DTO.MeetingDTO;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 import com.example.meetingtogether.ui.meetings.NewMeetingActivity;
+import com.example.meetingtogether.ui.meetings.NewReserveMeetingActivity;
 import com.example.meetingtogether.ui.meetings.ParticipateMeetingActivity;
 import com.example.meetingtogether.ui.user.LoginActivity;
 import com.example.meetingtogether.ui.user.SignUpActivity;
@@ -58,29 +71,66 @@ public class MeetingListFragment extends Fragment {
     private MeetingListFragment.MyPagerAdapter mAdapter;
     private ViewPager2 mViewPager;
     private TabLayout mTabLayout;
-    private List<Fragment> fragmentList = new ArrayList<>();
+//    public static List<Fragment> fragmentList = new ArrayList<>();
 
-    private static final String TAG = "TEST";
     private String title = "public";
     private List<MeetingDTO> meetingDTOList;
+    private Handler handler;
+
+
+    /**
+     * 채팅 예약방 생성 완료 콜백
+     */
+    private ActivityResultLauncher reserveCompleteLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
+        @Override
+        public void onActivityResult(ActivityResult result) {
+            // 추가
+            if(result.getResultCode() == RESULT_OK){
+                MessageDTO messageDTO = new MessageDTO();
+                messageDTO.setType(MessageDTO.RequestType.NOTIFY_MEETING_RESERVE_CREATED);
+
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try{
+                            Thread.sleep(1000);
+                            if(MainActivity.mChatService != null) MainActivity.mChatService.sendMsg(messageDTO);
+                        }catch (Exception e){
+                            Log.d(TAG, "예약 회의방이 생성이 완료되어 소켓서버로 데이터를 송신 중 에러가 발생헀습니다. e:" + e.getMessage());
+                        }
+                    }
+                });
+            // 취소
+            }else {
+
+            }
+        }
+    });
+
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onCreate");
     }
 
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
 
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onCreateView");
+
         binding = FragmentMeetinglistBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
+
+        HandlerThread handlerChatThread = new HandlerThread("wait-thread");
+        handlerChatThread.start();
+        handler = new Handler(handlerChatThread.getLooper());
 
         /**
          * ViewPager 에 어댑터 세팅
          */
         mViewPager = binding.viewPager;
-        mAdapter = new MeetingListFragment.MyPagerAdapter(this);
+        mAdapter = new MeetingListFragment.MyPagerAdapter(getActivity());
         mViewPager.setAdapter(mAdapter);
 
         /**
@@ -138,14 +188,8 @@ public class MeetingListFragment extends Fragment {
         binding.participateContainer.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // 1. 방번호 입력 팝업 창 띄워주기
-
-                // 2. 로컬 데이터에 해당 방이 존재 한다면 방 진입
-
-                // 3. 해당 방에 비밀번호가 존재하는지 체크
-                // 비밀번호가 존재한다면, 비밀번호 입력 팝업창 띄우기 => 비밀번호가 맞으면 "방 참가전 미리보기 화면" 으로 이동
-                // 비밀번호가 존재하지 않는다면, 바로 "방 참가전 미리보기 화면" 으로 이동
-
+                // 방 번호 입력 Dialog show
+                showParticipateDialog();
             }
         });
 
@@ -155,9 +199,12 @@ public class MeetingListFragment extends Fragment {
         binding.reserveContainer.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
+                Intent intent = new Intent(getActivity(), NewReserveMeetingActivity.class);
+                reserveCompleteLauncher.launch(intent);
             }
         });
+
+        mAdapter.notifyDataSetChanged();
 
         return root;
     }
@@ -189,18 +236,25 @@ public class MeetingListFragment extends Fragment {
             public void onResponse(Call<List<MeetingDTO>> call, Response<List<MeetingDTO>> response) {
                 meetingDTOList = response.body();
 
-                if(fragmentList.size() == 0) return;
+//                Log.d(TAG, "fragmentList:" + fragmentList);
+//                if(fragmentList.size() == 0) return;
+
+                ViewPager2 viewPager = binding.viewPager;
+                FragmentStateAdapter adapter = (FragmentStateAdapter) viewPager.getAdapter();
+                int currentPosition = viewPager.getCurrentItem();
 
                 if (mViewPager.getCurrentItem() == 0) {
-                    PublicFragment publicFragment = (PublicFragment) fragmentList.get(mViewPager.getCurrentItem());
+                    PublicFragment publicFragment = (PublicFragment) getActivity().getSupportFragmentManager().findFragmentByTag("f" + currentPosition);
                     meetingDTOList = meetingDTOList.stream().filter(meetingDTO -> meetingDTO.getType() == MeetingDTO.TYPE.PUBLIC).collect(Collectors.toList());
                     publicFragment.update(meetingDTOList);
                 } else if (mViewPager.getCurrentItem() == 1) {
-                    PrivateFragment privateFragment = (PrivateFragment) fragmentList.get(mViewPager.getCurrentItem());
+                    PrivateFragment privateFragment = (PrivateFragment) getActivity().getSupportFragmentManager().findFragmentByTag("f" + currentPosition);
                     meetingDTOList = meetingDTOList.stream().filter(meetingDTO -> meetingDTO.getType() == MeetingDTO.TYPE.PRIVATE).collect(Collectors.toList());
                     privateFragment.update(meetingDTOList);
                 } else if (mViewPager.getCurrentItem() == 2) {
-                    ReserveFragment reserveFragment = (ReserveFragment) fragmentList.get(mViewPager.getCurrentItem());
+                    ReserveFragment reserveFragment = (ReserveFragment) getActivity().getSupportFragmentManager().findFragmentByTag("f" + currentPosition);
+                    meetingDTOList = meetingDTOList.stream().filter(meetingDTO -> meetingDTO.getType() == MeetingDTO.TYPE.RESERVE).collect(Collectors.toList());
+                    reserveFragment.update(meetingDTOList);
                 }
             }
 
@@ -215,6 +269,11 @@ public class MeetingListFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+
+        Log.d(TAG_LIFE, getClass().getSimpleName() + " onDestroyView");
+
+//        fragmentList.clear();
+
         binding = null;
     }
 
@@ -224,8 +283,8 @@ public class MeetingListFragment extends Fragment {
     public class MyPagerAdapter extends FragmentStateAdapter {
         private static final int NUM_PAGES = 3;
 
-        public MyPagerAdapter(Fragment fragment) {
-            super(fragment);
+        public MyPagerAdapter(FragmentActivity FragmentActivity) {
+            super(FragmentActivity);
         }
 
         @NonNull
@@ -244,7 +303,7 @@ public class MeetingListFragment extends Fragment {
                     break;
             }
 
-            fragmentList.add(fragment);
+//            fragmentList.add(fragment);
             return fragment;
         }
 
@@ -349,4 +408,102 @@ public class MeetingListFragment extends Fragment {
         // AlertDialog 보이기
         builder.show();
     }
+
+    private void showParticipateDialog(){
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        builder.setTitle("참가 방번호 입력");
+
+        // EditText를 추가하여 입력을 받을 수 있도록 설정
+        EditText input = new EditText(getActivity());
+        input.setHint("회의방 번호를 입력하세요");
+        builder.setView(input);
+
+        // 확인 버튼 설정
+        builder.setPositiveButton("확인", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String roomId = input.getText().toString();
+                if(!isNumeric(roomId)){
+                    Toast.makeText(getActivity(), "숫자를 입력해주세요", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                int roomIdInt = Integer.valueOf(roomId);
+
+
+                // 서버에서 해당 방번호로 방 존재하는지 확인 및 정보 가져오기
+                Call<MeetingDTO> call = RetrofitService.getInstance().getService().checkExistRoom(roomIdInt);
+                call.enqueue(new Callback<MeetingDTO>() {
+                    @Override
+                    public void onResponse(Call<MeetingDTO> call, Response<MeetingDTO> response) {
+                        MeetingDTO dMeetingDTO = response.body();
+                        int roomId = dMeetingDTO.getId();
+                        int maxClient = dMeetingDTO.getMaxClient();
+                        int currentClient = dMeetingDTO.getCurrentClient();
+                        String roomPassword = dMeetingDTO.getPassword();
+
+                        boolean isExistRoom = false;
+                        if(roomId != -1){
+                            isExistRoom = true;
+                        }
+
+                        if(currentClient >= maxClient){
+                            Toast.makeText(getActivity(), "해당 방은 이미 가득 찼습니다.",Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        if(isExistRoom){
+                            // 비밀번호가 없을 때
+                            if("".equals(roomPassword) || roomPassword == null){
+                                /** 회의 참가 전 화면 이동 */
+                                Intent intent = new Intent(getActivity(), ParticipateMeetingActivity.class);
+                                String jsonString = gson.toJson(dMeetingDTO);
+                                intent.putExtra("jsonString", jsonString);
+                                startActivity(intent);
+                            // 비밀번호가 있을 때
+                            }else{
+                                showPasswordAlert(dMeetingDTO, false);
+                            }
+                        }else{
+                            Toast.makeText(getActivity(), "해당 방은 존재하지 않습니다.",Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<MeetingDTO> call, Throwable t) {
+                        // 오류 처리
+                        Log.d(TAG, t.getMessage());
+                        Toast.makeText(getActivity(), "해당 방은 존재하지 않습니다.",Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+
+        // 취소 버튼 설정
+        builder.setNegativeButton("취소", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+
+        // AlertDialog 보이기
+        builder.show();
+    }
+
+    private boolean isNumeric(String str) {
+        try {
+            Double.parseDouble(str);  // Double 혹은 Integer 등 사용 가능
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+    }
 }
+
+

@@ -19,6 +19,7 @@ import com.example.meetingtogether.ui.meetings.DTO.DrawingModel;
 import org.webrtc.DataChannel;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoFrame;
+import static com.example.meetingtogether.MainActivity.TAG;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -30,7 +31,6 @@ public class DrawingView extends SurfaceViewRenderer {
 
     private Map<String, DrawingModel> currentDrawingMap = new HashMap<>();
 
-    private String TAG = "TEST";
     private Context context;
     private Bitmap bitmap;
 

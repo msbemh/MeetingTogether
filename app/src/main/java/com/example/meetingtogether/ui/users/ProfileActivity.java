@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 public class ProfileActivity extends AppCompatActivity {
 
     private ActivityProfileBinding binding;
-    private String TAG = "TEST";
     private AlertDialog.Builder builder;
     private String userId;
     private String friendId;

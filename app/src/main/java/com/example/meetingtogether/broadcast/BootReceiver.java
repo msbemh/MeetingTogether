@@ -2,6 +2,7 @@ package com.example.meetingtogether.broadcast;
 
 import static androidx.core.content.ContextCompat.startForegroundService;
 
+import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.pref;
 
 import android.app.Activity;
@@ -27,7 +28,6 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 public class BootReceiver extends BroadcastReceiver {
-    private String TAG = "TEST";
 
     @Override
     public void onReceive(Context context, Intent intent) {

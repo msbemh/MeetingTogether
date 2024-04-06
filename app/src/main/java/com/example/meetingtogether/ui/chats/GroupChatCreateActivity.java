@@ -17,6 +17,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.CompoundButton;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
@@ -74,23 +75,43 @@ public class GroupChatCreateActivity extends AppCompatActivity {
         binding.createButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String roomName = binding.roomName.getText().toString();
-
-                if(roomName == null || roomName.isEmpty()){
-                    Toast.makeText(GroupChatCreateActivity.this, "방 이름을 입력하세요.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+//                String roomName = binding.roomName.getText().toString();
+//
+//                if(roomName == null || roomName.isEmpty()){
+//                    Toast.makeText(GroupChatCreateActivity.this, "방 이름을 입력하세요.", Toast.LENGTH_SHORT).show();
+//                    return;
+//                }
 
                 if(addDataList.size() == 0){
                     Toast.makeText(GroupChatCreateActivity.this, "초대할 인원을 1명 이상 선택하세요.", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
+
+                String groupRoomName = "";
+                String groupRoomFriendId = "";
+                for(int i=0; i<addDataList.size(); i++){
+                    Contact contact = addDataList.get(i);
+                    String friendName = contact.getFriendName();
+                    String friendId = contact.getFriendId();
+
+                    if(i != addDataList.size() -1){
+                        friendName += ", ";
+                        friendId += ";";
+                    }
+                    groupRoomName += friendName;
+                    groupRoomFriendId += friendId;
+                }
+
                 CreateRoomDTO createRoomDTO = new CreateRoomDTO();
                 createRoomDTO.setContactList(addDataList);
-                createRoomDTO.setName(roomName);
+                createRoomDTO.setName(groupRoomName);
 
                 Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postCreateGroupRoom(createRoomDTO);
+
+                String finalGroupRoomName = groupRoomName;
+                String finalGroupRoomFriendId = groupRoomFriendId;
+
                 call.enqueue(new Callback<CommonRetrofitResponse>() {
                     @Override
                     public void onResponse(Call<CommonRetrofitResponse> call, Response<CommonRetrofitResponse> response) {
@@ -102,23 +123,8 @@ public class GroupChatCreateActivity extends AppCompatActivity {
                         intent.putExtra(ROOMID, roomId);
                         intent.putExtra(ROOM_TYPE_ID, MessageDTO.RoomType.GROUP.name());
 
-                        String groupRoomName = "";
-                        String groupRoomFriendId = "";
-                        for(int i=0; i<addDataList.size(); i++){
-                            Contact contact = addDataList.get(i);
-                            String friendName = contact.getFriendName();
-                            String friendId = contact.getFriendId();
-
-                            if(i != addDataList.size() -1){
-                                friendName += ", ";
-                                friendId += ";";
-                            }
-                            groupRoomName += friendName;
-                            groupRoomFriendId += friendId;
-                        }
-
-                        intent.putExtra(OTHER_USER_NAME, groupRoomName);
-                        intent.putExtra(OTHER_USER_ID, groupRoomFriendId);
+                        intent.putExtra(OTHER_USER_NAME, finalGroupRoomName);
+                        intent.putExtra(OTHER_USER_ID, finalGroupRoomFriendId);
 
                         startActivity(intent);
 
@@ -166,15 +172,14 @@ public class GroupChatCreateActivity extends AppCompatActivity {
                     }
                 }
 
-                RequestOptions requestOptions = new RequestOptions().circleCrop();
+                binding.userCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                    @Override
+                    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                        settingParticipateUser(position, binding);
+                    }
+                });
 
-                Glide
-                    .with(GroupChatCreateActivity.this)
-                    .load(imgPath == null ? R.mipmap.ic_launcher : "https://webrtc-sfu.kro.kr/" + imgPath)
-                    .apply(requestOptions)
-                    /** Glide는 원본 비율을 유지한다. */
-                    .override(500,500)
-                    .into(binding.imageViewProfile);
+                Util.loadProfile(GroupChatCreateActivity.this, binding.imageViewProfile, imgPath, CustomDialog.Type.PROFILE_IMAGE);
             }
 
             // TODO: 레이아웃 변경
@@ -193,17 +198,11 @@ public class GroupChatCreateActivity extends AppCompatActivity {
             @Override
             public void onItemClickListener(View view, int position, ViewBinding pBinding) {
                 UserRowSelectItemBinding userRowSelectItemBinding = (UserRowSelectItemBinding) pBinding;
-                Contact selectedContact = dataList.get(position);
-
                 boolean isChecked = userRowSelectItemBinding.userCheckBox.isChecked();
                 if(isChecked){
                     userRowSelectItemBinding.userCheckBox.setChecked(false);
-                    // 추가 리스트에서 해당 유저를 뺀다.
-                    addDataList = addDataList.stream().filter(contact -> !contact.getFriendId().equals(selectedContact.getFriendId())).collect(Collectors.toList());
                 }else{
                     userRowSelectItemBinding.userCheckBox.setChecked(true);
-                    // 추가 리스트에서 해당 유저를 넣는다.
-                    addDataList.add(selectedContact);
                 }
             }
             @Override
@@ -222,5 +221,19 @@ public class GroupChatCreateActivity extends AppCompatActivity {
         commonRecyclerView.setRowItem(R.layout.user_row_select_item);
         // 적용
         commonRecyclerView.adapt();
+    }
+
+    private void settingParticipateUser(int position, ViewBinding pBinding){
+        UserRowSelectItemBinding userRowSelectItemBinding = (UserRowSelectItemBinding) pBinding;
+        Contact selectedContact = dataList.get(position);
+
+        boolean isChecked = userRowSelectItemBinding.userCheckBox.isChecked();
+        if(isChecked){
+            // 추가 리스트에서 해당 유저를 넣는다.
+            addDataList.add(selectedContact);
+        }else{
+            // 추가 리스트에서 해당 유저를 뺀다.
+            addDataList = addDataList.stream().filter(contact -> !contact.getFriendId().equals(selectedContact.getFriendId())).collect(Collectors.toList());
+        }
     }
 }

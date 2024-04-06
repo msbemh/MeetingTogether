@@ -15,6 +15,9 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.provider.ContactsContract;
 import android.telephony.TelephonyManager;
@@ -25,6 +28,7 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
@@ -32,11 +36,13 @@ import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
+import com.example.meetingtogether.MyApplication;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.dialogs.CustomDialog;
 import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
+import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.users.ProfileActivity;
 
 import java.io.File;
@@ -62,6 +68,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Util {
+    public static String PERIODIC_TAG = "PERIODIC_TAG";
+    public static String WEBRTC_PEER = "WEBRTC_PEER";
+    public static String WEBRTC_WHITEBOARD = "WEBRTC_WHITEBOARD";
+    public static String DRAW_TAG = "DRAW_TAG";
     public static int ACTION_CREATE = 0;
     public static int ACTION_EDIT = 1;
     public static int ACTION_DELETE = 2;
@@ -318,23 +328,54 @@ public class Util {
         return result;
     }
 
+    public static void loadProfile(Context context, ImageView imageView, Bitmap bitmap, CustomDialog.Type type){
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, bitmap, type, 500, requestOptions);
+    }
+
     public static void loadProfile(Context context, ImageView imageView, ProfileMap profileMap, CustomDialog.Type type){
-        RequestOptions requestOptions = null;
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, profileMap, type, 500, requestOptions);
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, String imgPath, CustomDialog.Type type){
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, imgPath, type, 500, requestOptions);
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, Bitmap bitmap, CustomDialog.Type type, int size){
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, bitmap, type, size, requestOptions);
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, ProfileMap profileMap, CustomDialog.Type type, int size){
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, profileMap, type, size, requestOptions);
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, String imgPath, CustomDialog.Type type, int size){
+        RequestOptions requestOptions = new RequestOptions().circleCrop();
+        loadProfile(context, imageView, imgPath, type, size, requestOptions);
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, ProfileMap profileMap, CustomDialog.Type type, int size, RequestOptions requestOptions){
+
+        if(requestOptions == null){
+            requestOptions = new RequestOptions();
+        }
 
         if(type == CustomDialog.Type.PROFILE_IMAGE){
-            requestOptions = new RequestOptions().circleCrop();
             if(profileMap == null){
                 Glide
                     .with(context)
                     .load(R.mipmap.ic_launcher)
                     .apply(requestOptions)
                     /** Glide는 원본 비율을 유지한다. */
-                    .override(500,500)
+                    .override(size,size)
                     .into(imageView);
                 return;
             }
         }else if(type == CustomDialog.Type.BACKGROUND_IMAGE){
-            requestOptions = new RequestOptions().centerCrop();
             if(profileMap == null){
                 Glide
                     .with(context)
@@ -342,7 +383,7 @@ public class Util {
                     .placeholder(R.color.silver)
                     .apply(requestOptions)
                     /** Glide는 원본 비율을 유지한다. */
-                    .override(500,500)
+                    .override(size,size)
                     .into(imageView);
                 return;
             }
@@ -350,12 +391,104 @@ public class Util {
 
         String imgPath = profileMap.getProfileImgPath();
 
+        boolean isGoogleLogin = imgPath.startsWith("https://");
+        if(!isGoogleLogin){
+            imgPath = "https://webrtc-sfu.kro.kr/" + imgPath;
+        }
+
         Glide
             .with(context)
-            .load("https://webrtc-sfu.kro.kr/" + imgPath)
+            .load(imgPath)
             .apply(requestOptions)
             /** Glide는 원본 비율을 유지한다. */
-            .override(500,500)
+            .override(size,size)
+            .into(imageView);
+
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, String imgPath, CustomDialog.Type type, int size, RequestOptions requestOptions){
+
+        if(requestOptions == null){
+            requestOptions = new RequestOptions();
+        }
+
+        if(type == CustomDialog.Type.PROFILE_IMAGE){
+            if(imgPath == null || "".equals(imgPath)){
+                Glide
+                    .with(context)
+                    .load(R.mipmap.ic_launcher)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(size,size)
+                    .into(imageView);
+                return;
+            }
+        }else if(type == CustomDialog.Type.BACKGROUND_IMAGE){
+            if(imgPath == null || "".equals(imgPath)){
+                Glide
+                    .with(context)
+                    .load("")
+                    .placeholder(R.color.silver)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(size,size)
+                    .into(imageView);
+                return;
+            }
+        }
+
+        boolean isGoogleLogin = imgPath.startsWith("https://");
+        if(!isGoogleLogin){
+            imgPath = "https://webrtc-sfu.kro.kr/" + imgPath;
+        }
+
+        Glide
+            .with(context)
+            .load(imgPath)
+            .apply(requestOptions)
+            /** Glide는 원본 비율을 유지한다. */
+            .override(size,size)
+            .into(imageView);
+
+    }
+
+    public static void loadProfile(Context context, ImageView imageView, Bitmap bitmap, CustomDialog.Type type, int size, RequestOptions requestOptions){
+
+        if(requestOptions == null){
+            requestOptions = new RequestOptions();
+        }
+
+        if(type == CustomDialog.Type.PROFILE_IMAGE){
+            if(bitmap == null){
+                Glide
+                    .with(context)
+                    .load(R.mipmap.ic_launcher)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(size,size)
+                    .into(imageView);
+                return;
+            }
+        }else if(type == CustomDialog.Type.BACKGROUND_IMAGE){
+            if(bitmap == null){
+                Glide
+                    .with(context)
+                    .load("")
+                    .placeholder(R.color.silver)
+                    .apply(requestOptions)
+                    /** Glide는 원본 비율을 유지한다. */
+                    .override(size,size)
+                    .into(imageView);
+                return;
+            }
+        }
+
+        Glide
+            .with(context)
+            .load(bitmap)
+            .apply(requestOptions)
+            /** Glide는 원본 비율을 유지한다. */
+            .override(size,size)
             .into(imageView);
 
     }
@@ -428,5 +561,40 @@ public class Util {
         return imgFile;
     }
 
+    public static boolean getNetwork(Context context){
+        ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        Network network = manager.getActiveNetwork();
+        NetworkCapabilities actNetwork = manager.getNetworkCapabilities(network);
+
+        if(actNetwork == null) return false;
+
+        if(actNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) || actNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)){
+            return true;
+        }
+
+        return false;
+    }
+
+    public static String getPhoneNum() {
+        String phoneNum = "";
+
+        Context context = MyApplication.ApplicationContext();
+
+        TelephonyManager telManager = (TelephonyManager) context.getSystemService(TELEPHONY_SERVICE);
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_NUMBERS) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(context, "전화번호 읽기 권한이 필요합니다.ㅣ",Toast.LENGTH_SHORT).show();
+            return null;
+        }
+
+        // 전화번호 정보 가져오기
+        phoneNum = telManager.getLine1Number();
+        if(phoneNum.startsWith("+82")) {
+            phoneNum = phoneNum.replace("+82", "0");
+        }
+        return phoneNum;
+    }
 
 }

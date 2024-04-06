@@ -197,14 +197,7 @@ public class MeetingUserListDialogFragment extends DialogFragment {
                 }
 
                 String imgPath = userModel.getImgPath();
-                RequestOptions requestOptions = new RequestOptions().circleCrop();
-                Glide
-                    .with(getActivity())
-                    .load(imgPath == null ? R.mipmap.ic_launcher : "https://webrtc-sfu.kro.kr/" + imgPath)
-                    .apply(requestOptions)
-                    /** Glide는 원본 비율을 유지한다. */
-                    .override(500,500)
-                    .into(binding.imageViewProfile);
+                Util.loadProfile(getActivity(), binding.imageViewProfile, imgPath, CustomDialog.Type.PROFILE_IMAGE);
             }
 
             // TODO: 레이아웃 변경

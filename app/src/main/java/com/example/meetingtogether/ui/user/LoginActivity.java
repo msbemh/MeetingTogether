@@ -4,14 +4,20 @@ import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.common.Common.IS_ACTIVATE_CAMERA;
 import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_NAME;
+import static com.example.meetingtogether.dialogs.CustomDialog.Type.PROFILE_IMAGE;
 import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.gson;
 import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.pref;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -25,6 +31,8 @@ import com.appsflyer.deeplink.DeepLinkResult;
 import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.ActivityLoginBinding;
+import com.example.meetingtogether.dialogs.CustomDialog;
+import com.example.meetingtogether.model.ProfileMap;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
@@ -33,8 +41,22 @@ import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
 import com.example.meetingtogether.ui.meetings.DTO.MeetingDTO;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 import com.example.meetingtogether.ui.meetings.ParticipateMeetingActivity;
+import com.google.android.gms.auth.api.Auth;
+import com.google.android.gms.auth.api.identity.GetSignInIntentRequest;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.auth.api.identity.SignInCredential;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.auth.api.signin.GoogleSignInResult;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
 
 import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -45,13 +67,27 @@ public class LoginActivity extends AppCompatActivity {
     private ActivityLoginBinding binding;
     private boolean deferred_deep_link_processed_flag = false;
     private final String YOUR_DEV_KEY = "F53Xt4VRqj3Nn9s27KD3eW";
+    private String GOOGLE_LOGIN_TAG = "GOOGLE_LOGIN_TAG";
+    private GoogleSignInClient mGoogleSignInClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // TODO : 임시 테스트
+//        Util.user = null;
+
         binding = ActivityLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        /**
+         * Google Login API 설정
+         */
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .build();
+
+        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
         // Shared Preference 초기화
         if(SharedPreferenceRepository.gson == null){
@@ -104,6 +140,14 @@ public class LoginActivity extends AppCompatActivity {
                 Intent intent = new Intent(LoginActivity.this, SignUpActivity.class);
 //                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(intent);
+            }
+        });
+
+        binding.googleLoginButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Toast.makeText(LoginActivity.this, "테스트", Toast.LENGTH_SHORT);
+                signIn();
             }
         });
 
@@ -170,6 +214,15 @@ public class LoginActivity extends AppCompatActivity {
 
     }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+        if(account != null){
+//            Toast.makeText(LoginActivity.this, "이미 구글 로그인 된 상태입니다.",Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void goMain(){
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
         startActivity(intent);
@@ -219,4 +272,83 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
     }
+
+    private static final int REQUEST_CODE_GOOGLE_SIGN_IN = 1; /* unique request id */
+    private static final int RC_SIGN_IN = 2;
+
+    private void signIn() {
+        Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+        startActivityForResult(signInIntent, RC_SIGN_IN);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == RC_SIGN_IN) {
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            handleSignInResult(task);
+        }
+    }
+
+    private void handleSignInResult(Task<GoogleSignInAccount> completedTask) {
+        try {
+            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
+            Log.d(GOOGLE_LOGIN_TAG, "account" + account);
+
+            if (account != null) {
+                String personName = account.getDisplayName();
+                String personGivenName = account.getGivenName();
+                String personFamilyName = account.getFamilyName();
+                String personEmail = account.getEmail();
+                String personId = account.getId();
+                Uri personPhoto = account.getPhotoUrl();
+                String phoneNum = Util.getPhoneNum();
+
+                User user = new User(personEmail, null, personName, phoneNum);
+                user.setName(personName);
+                if(personPhoto != null){
+                    List<ProfileMap> profileImgPaths = new ArrayList<>();
+                    ProfileMap profileMap = new ProfileMap("https://" +personPhoto.getHost() + personPhoto.getPath(), CustomDialog.Type.PROFILE_IMAGE.name());
+                    profileImgPaths.add(profileMap);
+                    user.setProfileImgPaths(profileImgPaths);
+                }
+
+                /** 서버로 Google User Insert 요청. 만약 이미 있으면 그냥 패스 */
+                Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postSignUp(user);
+                call.enqueue(new Callback<CommonRetrofitResponse>() {
+                    @Override
+                    public void onResponse(Call<CommonRetrofitResponse> call, Response<CommonRetrofitResponse> response) {
+                        // 응답 처리
+                        if (response.isSuccessful() && response.body().isResult()) {
+                            Log.d(GOOGLE_LOGIN_TAG, "구글 로그인에 성공했습니다.");
+
+                            String jwt = (String) response.body().getData();
+                            Util.user = user;
+                            Util.user.setJwt(jwt);
+
+                            SharedPreferenceRepository.saveUserForAutoLogin(Util.user);
+
+                            Toast.makeText(LoginActivity.this, "구글 로그인에 성공했습니다.",Toast.LENGTH_SHORT).show();
+                            goMain();
+                            finish();
+                            return;
+                        }
+
+                        Toast.makeText(LoginActivity.this, "구글 로그인에 실패 했습니다",Toast.LENGTH_SHORT).show();
+                        Log.d(GOOGLE_LOGIN_TAG, response.message());
+                    }
+                    @Override
+                    public void onFailure(Call<CommonRetrofitResponse> call, Throwable t) {
+                        // 오류 처리
+                        Log.d(GOOGLE_LOGIN_TAG, t.getMessage());
+                        Toast.makeText(LoginActivity.this, "구글 로그인에 실패 했습니다.",Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        } catch (ApiException e) {
+            Log.w(GOOGLE_LOGIN_TAG, "signInResult:failed code=" + e.getStatusCode());
+        }
+    }
+
 }

@@ -3,6 +3,8 @@ package com.example.meetingtogether.ui.meetings.DTO;
 import android.graphics.Paint;
 import android.graphics.Path;
 
+import androidx.annotation.NonNull;
+
 import com.example.meetingtogether.common.ColorType;
 
 public class DrawingModel {
@@ -10,12 +12,27 @@ public class DrawingModel {
     private Paint paint;
     private ColorType colorType;
     private String clientId;
+    private boolean isEnd;
+
+    @NonNull
+    @Override
+    public String toString() {
+        return "DrawingModel(path:" + path + ", paint:" + paint.getColor() + ", colorType:" + colorType.name() + ", clientId:" + clientId + ")";
+    }
+
+    public DrawingModel(Path path, Paint paint, ColorType colorType) {
+        this.path = path;
+        this.paint = paint;
+        this.colorType = colorType;
+        this.isEnd = false;
+    }
 
     public DrawingModel(Path path, Paint paint, ColorType colorType, String clientId) {
         this.path = path;
         this.paint = paint;
         this.colorType = colorType;
         this.clientId = clientId;
+        this.isEnd = false;
     }
 
     public ColorType getColorType() {
@@ -48,5 +65,13 @@ public class DrawingModel {
 
     public void setClientId(String clientId) {
         this.clientId = clientId;
+    }
+
+    public boolean isEnd() {
+        return isEnd;
+    }
+
+    public void setEnd(boolean end) {
+        isEnd = end;
     }
 }

@@ -11,6 +11,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.media.projection.MediaProjection;
@@ -32,10 +33,12 @@ import androidx.core.app.NotificationManagerCompat;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.common.Common;
 import com.example.meetingtogether.ui.meetings.CustomCapturer;
+import com.example.meetingtogether.ui.meetings.CustomScreenCapturerAndroid;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 
 import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.VideoCapturer;
+import org.webrtc.VideoFrame;
 
 public class MeetingService extends Service {
     private MediaProjectionManager mediaProjectionManager;
@@ -70,6 +73,7 @@ public class MeetingService extends Service {
     public interface MeetingServiceResult{
         void onScreenCapturerCreated(CustomCapturer customCapturer);
         void onError(String message);
+        void onFrame(VideoFrame frame);
     }
 
     @Override
@@ -78,16 +82,26 @@ public class MeetingService extends Service {
         return START_NOT_STICKY;
     }
 
+    private VideoCapturer screenCapturer;
+
     public void createCapturer(String type){
         // 커스텀 비디오 캡처러 생성
         CustomCapturer customCapturer = new CustomCapturer(type, context);
 
         // 화면 캡처러 생성
-        VideoCapturer screenCapturer = new ScreenCapturerAndroid(
+        screenCapturer = new CustomScreenCapturerAndroid(
                 resultData, new MediaProjection.Callback() {
             @Override
             public void onStop() {
                 Log.e(TAG, "화면 캡처를 위해서 권한 재요청");
+            }
+        });
+
+        // 좌우 반전을 위해 중간 frame 인터셉트
+        ((CustomScreenCapturerAndroid) screenCapturer).setInterface(new CustomScreenCapturerAndroid.FrameInterface() {
+            @Override
+            public void onFrame(VideoFrame frame) {
+                event.onFrame(frame);
             }
         });
 
@@ -99,6 +113,10 @@ public class MeetingService extends Service {
         if(event != null) event.onScreenCapturerCreated(customCapturer);
         else event.onError("아직 인터페이스가 세팅되지 않았습니다.");
 
+    }
+
+    public void onFrameCaptured(VideoFrame frame){
+        ((CustomScreenCapturerAndroid) screenCapturer).onFrameCaptured(frame);
     }
 
     public void setInterface(MeetingServiceResult event){
@@ -245,5 +263,6 @@ public class MeetingService extends Service {
     public void setContext(Context context) {
         this.context = context;
     }
+
 
 }

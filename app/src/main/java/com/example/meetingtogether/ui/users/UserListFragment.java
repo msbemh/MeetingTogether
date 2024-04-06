@@ -226,23 +226,16 @@ public class UserListFragment extends Fragment {
                 binding.profileName.setText(filteredList.get(position).getFriendName());
 
                 String imgPath = null;
+
                 // 프로필 이미지만 필터링
+
                 if(filteredList.get(position).getFriendImgPaths().size() > 0) {
                     ProfileMap userProfileMap = filteredList.get(position).getFriendImgPaths().stream().filter(profileMap -> profileMap.getType().equals(CustomDialog.Type.PROFILE_IMAGE.name())).findFirst().orElse(null);
                     if(userProfileMap != null){
-                        imgPath = userProfileMap.getProfileImgPath();
+                        Util.loadProfile(getActivity(), binding.imageViewProfile, userProfileMap, CustomDialog.Type.PROFILE_IMAGE);
                     }
                 }
 
-                RequestOptions  requestOptions = new RequestOptions().circleCrop();
-
-                Glide
-                    .with(getActivity())
-                    .load(imgPath == null ? R.mipmap.ic_launcher : "https://webrtc-sfu.kro.kr/" + imgPath)
-                    .apply(requestOptions)
-                    /** Glide는 원본 비율을 유지한다. */
-                    .override(500,500)
-                    .into(binding.imageViewProfile);
             }
 
             // TODO: 레이아웃 변경
@@ -295,7 +288,8 @@ public class UserListFragment extends Fragment {
         super.onStart();
 
         // 프로필 이미지 로드
-        ProfileMap profileMap = Util.user.getMyProfileMap();
+        ProfileMap profileMap = null;
+        if(Util.user != null) profileMap = Util.user.getMyProfileMap();
 
         Util.loadProfile(getActivity(), binding.imageViewProfile, profileMap, CustomDialog.Type.PROFILE_IMAGE);
         binding.profileName.setText(Util.user.getName());

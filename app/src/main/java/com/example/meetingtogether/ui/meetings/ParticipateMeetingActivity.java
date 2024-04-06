@@ -752,6 +752,8 @@ public class ParticipateMeetingActivity extends AppCompatActivity {
      * Stops the background thread and its {@link Handler}.
      */
     private void stopBackgroundThread() {
+        if(mBackgroundThread == null) return;
+
         mBackgroundThread.quitSafely();
         try {
             mBackgroundThread.join();

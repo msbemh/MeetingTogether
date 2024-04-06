@@ -91,6 +91,7 @@ dependencies {
     implementation 'com.google.zxing:core:3.3.3'
     implementation 'com.journeyapps:zxing-android-embedded:3.6.0'
 
-
+    // Google Login
+    implementation 'com.google.android.gms:play-services-auth:21.0.0'
 
 }

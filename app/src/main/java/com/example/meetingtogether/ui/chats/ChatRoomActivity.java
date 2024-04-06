@@ -70,6 +70,7 @@ import com.example.meetingtogether.retrofit.FileInfo;
 import com.example.meetingtogether.retrofit.LocalDateTimeDeserializer;
 import com.example.meetingtogether.retrofit.RetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
+import com.example.meetingtogether.retrofit.ZonedDateTimeDeserializer;
 import com.example.meetingtogether.services.ChatService;
 import com.example.meetingtogether.services.TestService;
 import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
@@ -91,6 +92,7 @@ import org.webrtc.DataChannel;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -434,16 +436,16 @@ public class ChatRoomActivity extends AppCompatActivity {
             roomType = MessageDTO.RoomType.valueOf(getIntent().getStringExtra(ROOM_TYPE_ID));
         }
 
-        if(roomType == MessageDTO.RoomType.INDIVIDUAL){
-            friendId = getIntent().getStringExtra(OTHER_USER_ID);
-            friendName = getIntent().getStringExtra(OTHER_USER_NAME);
-            roomName = friendName;
-
-        }else if(roomType == MessageDTO.RoomType.GROUP){
-            friendId = getIntent().getStringExtra(OTHER_USER_ID);
-            friendName = getIntent().getStringExtra(OTHER_USER_NAME);
-            roomName = getIntent().getStringExtra(ROOM_NAME);;
-        }
+        friendId = getIntent().getStringExtra(OTHER_USER_ID);
+        friendName = getIntent().getStringExtra(OTHER_USER_NAME);
+        roomName = friendName;
+//        if(roomType == MessageDTO.RoomType.INDIVIDUAL){
+//
+//        }else if(roomType == MessageDTO.RoomType.GROUP){
+//            friendId = getIntent().getStringExtra(OTHER_USER_ID);
+//            friendName = getIntent().getStringExtra(OTHER_USER_NAME);
+//            roomName = friendName;
+//        }
 
         binding.chatTitle.setText(roomName);
 
@@ -570,32 +572,38 @@ public class ChatRoomActivity extends AppCompatActivity {
                         chatRoomHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                RequestOptions  requestOptions = new RequestOptions().circleCrop();
-                                try {
-                                    Bitmap bitmap = Glide
-                                            .with(ChatRoomActivity.this)
-                                            /** Glide는 원본 비율을 유지한다. */
-                                            .asBitmap()
-                                            .load("https://webrtc-sfu.kro.kr/" + profileImgPath)
-                                            .apply(requestOptions)
-                                            .submit()
-                                            .get();
-
-                                    runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            Glide
-                                                    .with(ChatRoomActivity.this)
-                                                    .load(bitmap)
-                                                    /** Glide는 원본 비율을 유지한다. */
-                                                    .override(100,100)
-                                                    .into(binding.profile);
-                                        }
-                                    });
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                    Log.e(TAG, e.getMessage());
-                                }
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Util.loadProfile(ChatRoomActivity.this, binding.profile, profileImgPath, CustomDialog.Type.PROFILE_IMAGE, 100);
+                                    }
+                                });
+//                                RequestOptions  requestOptions = new RequestOptions().circleCrop();
+//                                try {
+////                                    Bitmap bitmap = Glide
+////                                            .with(ChatRoomActivity.this)
+////                                            /** Glide는 원본 비율을 유지한다. */
+////                                            .asBitmap()
+////                                            .load("https://webrtc-sfu.kro.kr/" + profileImgPath)
+////                                            .apply(requestOptions)
+////                                            .submit()
+////                                            .get();
+////
+////                                    runOnUiThread(new Runnable() {
+////                                        @Override
+////                                        public void run() {
+////                                            Glide
+////                                                .with(ChatRoomActivity.this)
+////                                                .load(bitmap)
+////                                                /** Glide는 원본 비율을 유지한다. */
+////                                                .override(100,100)
+////                                                .into(binding.profile);
+////                                        }
+////                                    });
+//                                } catch (Exception e) {
+//                                    e.printStackTrace();
+//                                    Log.e(TAG, e.getMessage());
+//                                }
                             }
                         });
                     }
@@ -948,6 +956,7 @@ public class ChatRoomActivity extends AppCompatActivity {
 
         GsonBuilder gsonBuilder = new GsonBuilder();
         gsonBuilder.registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer());
+        gsonBuilder.registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeDeserializer());
         gson = gsonBuilder.create();
     }
 
@@ -989,6 +998,8 @@ public class ChatRoomActivity extends AppCompatActivity {
         if(roomId != -1 && isAlbum == false){
             renewDate("OUT");
         }
+
+        if(mChatService != null) mChatService.setRoomId(-1);
     }
 
     private void setChatServiceInterface(){

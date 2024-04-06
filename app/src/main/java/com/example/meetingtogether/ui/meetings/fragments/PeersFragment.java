@@ -4,9 +4,12 @@ import static com.example.meetingtogether.MainActivity.TAG;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 
 import androidx.fragment.app.Fragment;
 
@@ -37,6 +40,32 @@ public class PeersFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentPeersBinding.inflate(inflater, container, false);
         Log.d(TAG, "[PeerFragment] onCreateView");
+
+        /**
+         * 메인 화면 비율을 1:1로 맞춘다.
+         */
+        ViewTreeObserver viewTreeObserver = binding.mainSurfaceView.getViewTreeObserver();
+        viewTreeObserver.addOnGlobalLayoutListener(
+            new ViewTreeObserver.OnGlobalLayoutListener() {
+                @Override
+                public void onGlobalLayout() {
+                    // View의 크기가 변경되었을 때 실행할 작업을 여기에 구현합니다.
+                    int width = binding.mainSurfaceView.getWidth();
+                    int height = binding.mainSurfaceView.getHeight();
+
+                    int min = Math.min(width, height);
+
+                    // 리스너를 제거합니다.
+                    binding.mainSurfaceView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+
+                    FrameLayout.LayoutParams Layoutparams = (FrameLayout.LayoutParams) binding.mainSurfaceView.getLayoutParams();
+                    Layoutparams.width = min;
+                    Layoutparams.height = min;
+                    Layoutparams.gravity = Gravity.CENTER;
+                    binding.mainSurfaceView.setLayoutParams(Layoutparams);
+                }
+        });
+
 
         try{
             this.createResultInterface.onCreated(binding);

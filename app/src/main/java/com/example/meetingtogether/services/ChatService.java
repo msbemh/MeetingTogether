@@ -8,6 +8,7 @@ import static com.example.meetingtogether.common.Common.OTHER_USER_NAME;
 import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_NAME;
 import static com.example.meetingtogether.common.Common.ROOM_TYPE_ID;
+import static com.example.meetingtogether.common.Util.PERIODIC_TAG;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -51,6 +52,7 @@ import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.LocalDateTimeDeserializer;
 import com.example.meetingtogether.retrofit.RetrofitService;
+import com.example.meetingtogether.retrofit.ZonedDateTimeDeserializer;
 import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.chats.GroupChatCreateActivity;
 import com.example.meetingtogether.ui.meetings.CustomCapturer;
@@ -69,7 +71,10 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
 
 import retrofit2.Call;
@@ -93,6 +98,7 @@ public class ChatService extends Service {
     private final String SERVER_HOST = "34.64.140.200";
     private final int SERVER_PORT = 11002;
     public static int roomId = -1;
+    private Thread thread;
 
     public class ChatServiceBinder extends Binder {
         public ChatService getService() {
@@ -103,6 +109,7 @@ public class ChatService extends Service {
     public ChatService() {
         GsonBuilder gsonBuilder = new GsonBuilder();
         gsonBuilder.registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer());
+        gsonBuilder.registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeDeserializer());
         gson = gsonBuilder.create();
     }
 
@@ -170,111 +177,137 @@ public class ChatService extends Service {
                 Log.d(TAG, t.getMessage());
             }
         });
+
+        // 주기적으로 소켓 열려있는지 확인하는 인터벌 타이머
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                // 소켓 연결
+                openSocket();
+            }
+        }, 0, 5000);
     }
 
     private void openSocket(){
         try {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    // 서버로 부터 메시지 받는 곳
-                    try {
-                        socket = new Socket(SERVER_HOST, SERVER_PORT);
+            if(!Util.getNetwork(getApplicationContext())){
+                Log.d(TAG, "네트워크 연결이 되지 않아 소켓 연결을 할 수 없습니다.");
+                return;
+            }
 
-                        OutputStream outputStream = socket.getOutputStream();
-                        outputStream.flush();
-                        OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
-
-                        writer = new PrintWriter(outputStreamWriter, true);
-
-                        // Create input stream to receive data from the server
-                        reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-                        // 사용자 추가 요청
-                        MessageDTO sendMsgDTO = new MessageDTO();
-                        sendMsgDTO.setUser(Util.user);
-                        sendMsgDTO.setType(MessageDTO.RequestType.USER_ADD);
-                        sendMsg(sendMsgDTO);
-
-                        /** 수신 대기 */
-                        String jsonString;
-                        /** 무한 츠쿠요미 */
-                        while ((jsonString = reader.readLine()) != null) {
-
-                            MessageDTO receiveMsgDTO = gson.fromJson(jsonString, MessageDTO.class);
-
-                            MessageDTO.RequestType type = receiveMsgDTO.getType();
-
-                            // 사용자 추가
-                            if(type == MessageDTO.RequestType.USER_ADD){
-                                Log.d(TAG, "프로그램 접속에 완료 됐습니다.");
-                                handler.post(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        if(roomListEvent != null) roomListEvent.onUserAdd();
-                                        if(roomEvent != null) roomEvent.onUserAdd();
-                                    }
-                                });
-                            // 방 리스트
-                            }else if(type == MessageDTO.RequestType.ROOM_LIST){
-//                        clientInterface.onRoomList(receiveMsgDTO);
-                            // 사용자 리스트
-                            }else if(type == MessageDTO.RequestType.USER_LIST){
-//                        clientInterface.onUserList(receiveMsgDTO);
-                            // 텍스트 메시지
-                            }else if(type == MessageDTO.RequestType.MESSAGE || type == MessageDTO.RequestType.IMAGE){
-                                handler.post(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        if(roomListEvent != null) roomListEvent.onMessage(receiveMsgDTO);
-                                        if(roomEvent != null) roomEvent.onMessage(receiveMsgDTO);
-                                    }
-                                });
-
-                                /** 노티피케이션 */
-                                Log.d(TAG, "[TEST]receiveMsgDTO.getRoomUuid():" + receiveMsgDTO.getRoomUuid());
-                                Log.d(TAG, "[TEST]roomId:" + roomId);
-                                if(receiveMsgDTO.getRoomUuid() != roomId || roomId == -1) showMessageNotification(receiveMsgDTO);
-
-//                        clientInterface.onMessage(receiveMsgDTO);
-                            // 나의 메시지를 갱신 시킨다.
-                            }else if(type == MessageDTO.RequestType.OTHER_USER_MSG_RENEW){
-                                if(roomEvent != null) roomEvent.onMessage(receiveMsgDTO);
-                            // 방에 입장
-                            }else if(type == MessageDTO.RequestType.ROOM_ENTER){
-//                        clientInterface.onRoomEnter(receiveMsgDTO);
-                            // 방에서 나가기
-                            }else if(type == MessageDTO.RequestType.ROOM_OUT){
-//                        clientInterface.onRoomOut(receiveMsgDTO);
-                            // 방 생성
-                            }else if(type == MessageDTO.RequestType.ROOM_CREATE){
-//                        clientInterface.onRoomAdd(receiveMsgDTO);
-                            // 아예 나가기
-                            }else if(type == MessageDTO.RequestType.EXIT){
-//                        clientInterface.onExit(receiveMsgDTO);
-                            }else if(type == MessageDTO.RequestType.MEETING_RESERVE_NOTIFICATION){
-                                /**
-                                 * 예약 회의방 알림 메시지 출력
-                                 */
-                                showReserveNotification(receiveMsgDTO);
-
-                            }
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
+            if(thread == null || !thread.isAlive()){
+                Log.d(TAG, "소켓 연결을 시작합니다.");
+                thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        // 서버로 부터 메시지 받는 곳
                         try {
-                            if(socket != null) socket.close();
-                        } catch (IOException ex) {
-                            ex.printStackTrace();
+                            socket = new Socket(SERVER_HOST, SERVER_PORT);
+
+                            OutputStream outputStream = socket.getOutputStream();
+                            outputStream.flush();
+                            OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
+
+                            writer = new PrintWriter(outputStreamWriter, true);
+
+                            // Create input stream to receive data from the server
+                            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                            // 사용자 추가 요청
+                            MessageDTO sendMsgDTO = new MessageDTO();
+                            sendMsgDTO.setUser(Util.user);
+                            sendMsgDTO.setType(MessageDTO.RequestType.USER_ADD);
+                            sendMsg(sendMsgDTO);
+
+                            /** 수신 대기 */
+                            String jsonString;
+                            /** 무한 츠쿠요미 */
+                            while ((jsonString = reader.readLine()) != null) {
+
+                                MessageDTO receiveMsgDTO = gson.fromJson(jsonString, MessageDTO.class);
+
+                                if(receiveMsgDTO == null) continue;
+
+                                MessageDTO.RequestType type = receiveMsgDTO.getType();
+
+                                // 사용자 추가
+                                if(type == MessageDTO.RequestType.USER_ADD){
+                                    Log.d(TAG, "프로그램 접속에 완료 됐습니다.");
+                                    handler.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if(roomListEvent != null) roomListEvent.onUserAdd();
+                                            if(roomEvent != null) roomEvent.onUserAdd();
+                                        }
+                                    });
+                                // 방 리스트
+                                }else if(type == MessageDTO.RequestType.ROOM_LIST){
+    //                        clientInterface.onRoomList(receiveMsgDTO);
+                                // 사용자 리스트
+                                }else if(type == MessageDTO.RequestType.USER_LIST){
+    //                        clientInterface.onUserList(receiveMsgDTO);
+                                // 텍스트 메시지
+                                }else if(type == MessageDTO.RequestType.MESSAGE || type == MessageDTO.RequestType.IMAGE){
+                                    handler.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if(roomListEvent != null) roomListEvent.onMessage(receiveMsgDTO);
+                                            if(roomEvent != null) roomEvent.onMessage(receiveMsgDTO);
+                                        }
+                                    });
+
+                                    /** 노티피케이션 */
+                                    Log.d(TAG, "[TEST]receiveMsgDTO.getRoomUuid():" + receiveMsgDTO.getRoomUuid());
+                                    Log.d(TAG, "[TEST]roomId:" + roomId);
+                                    if(receiveMsgDTO.getRoomUuid() != roomId || roomId == -1) showMessageNotification(receiveMsgDTO);
+    //                        clientInterface.onMessage(receiveMsgDTO);
+                                // 나의 메시지를 갱신 시킨다.
+                                }else if(type == MessageDTO.RequestType.OTHER_USER_MSG_RENEW){
+                                    if(roomEvent != null) roomEvent.onMessage(receiveMsgDTO);
+                                // 방에 입장
+                                }else if(type == MessageDTO.RequestType.ROOM_ENTER){
+    //                        clientInterface.onRoomEnter(receiveMsgDTO);
+                                // 방에서 나가기
+                                }else if(type == MessageDTO.RequestType.ROOM_OUT){
+    //                        clientInterface.onRoomOut(receiveMsgDTO);
+                                // 방 생성
+                                }else if(type == MessageDTO.RequestType.ROOM_CREATE){
+    //                        clientInterface.onRoomAdd(receiveMsgDTO);
+                                // 아예 나가기
+                                }else if(type == MessageDTO.RequestType.EXIT){
+    //                        clientInterface.onExit(receiveMsgDTO);
+                                }else if(type == MessageDTO.RequestType.MEETING_RESERVE_NOTIFICATION){
+                                    /**
+                                     * 예약 회의방 알림 메시지 출력
+                                     */
+                                    showReserveNotification(receiveMsgDTO);
+
+                                }
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            try {
+                                if(socket != null){
+                                    socket.close();
+                                    socket = null;
+                                }
+                            } catch (IOException ex) {
+                                ex.printStackTrace();
+                            }
+                            Log.d(TAG, "소켓 종료");
+                            /** 소켓이 종료 되면 서비스도 죽이자.  */
+//                            stopForeground(true);
+//                            stopSelf();
+                            showMessage("소켓연결에 실패하여 채팅 서비스는 종료됩니다.");
                         }
+                        Log.d(TAG, "채팅 서비스 스레드 종료 됐습니다.");
                     }
-                    Log.d(TAG, "소켓 종료");
-                    /** 소켓이 종료 되면 서비스도 죽이자.  */
-                    stopForeground(true);
-                    stopSelf();
-                    showMessage("소켓연결에 실패하여 채팅 서비스는 종료됩니다.");
-                }
-            }).start();
+                });
+                thread.start();
+            }else{
+                Log.d(PERIODIC_TAG, "소켓이 이미 연결되어져 있습니다.");
+            }
         } catch (Exception e) {
             Log.e(TAG, e.getMessage());
         }
@@ -385,7 +418,7 @@ public class ChatService extends Service {
             NotificationChannel serviceChannel = new NotificationChannel(
                     channel,
                     channel,
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_HIGH
             );
 
             NotificationManager manager = getSystemService(NotificationManager.class);

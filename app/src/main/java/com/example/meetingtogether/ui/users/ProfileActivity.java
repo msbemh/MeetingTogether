@@ -79,7 +79,7 @@ public class ProfileActivity extends AppCompatActivity {
                 Util.loadProfile(ProfileActivity.this, binding.profileImage, userProfileMap, CustomDialog.Type.PROFILE_IMAGE);
 
                 // 배경 이미지 로드
-                Util.loadProfile(ProfileActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE);
+                Util.loadProfile(ProfileActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE, 500, null);
             // 취소
             }else {
 
@@ -106,7 +106,7 @@ public class ProfileActivity extends AppCompatActivity {
                 Util.loadProfile(ProfileActivity.this, binding.profileImage, userProfileMap, CustomDialog.Type.PROFILE_IMAGE);
 
                 // 배경 이미지 로드
-                Util.loadProfile(ProfileActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE);
+                Util.loadProfile(ProfileActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE, 500, null);
             // 취소
             }else {
 
@@ -204,6 +204,7 @@ public class ProfileActivity extends AppCompatActivity {
                      */
                     intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(intent);
+                    finish();
                 }
             })
             .setNegativeButton("취소", null);
@@ -289,7 +290,7 @@ public class ProfileActivity extends AppCompatActivity {
 
         // 배경 이미지 로드
 //        ProfileMap backgroundProfileMap = Util.user.getMyBackgroundMap();
-        Util.loadProfile(this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE);
+        Util.loadProfile(ProfileActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE, 500, null);
 
     }
 

@@ -5,6 +5,7 @@ import com.example.meetingtogether.model.User;
 import com.google.gson.annotations.SerializedName;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 public class MeetingDTO {
@@ -27,10 +28,10 @@ public class MeetingDTO {
     private int currentClient;
 
     @SerializedName("reserve_start_date")
-    private LocalDateTime reserve_start_date;
+    private ZonedDateTime reserve_start_date;
 
     @SerializedName("reserve_end_date")
-    private LocalDateTime reserve_end_date;
+    private ZonedDateTime reserve_end_date;
 
     @SerializedName("host")
     private String host;
@@ -90,19 +91,19 @@ public class MeetingDTO {
         this.password = password;
     }
 
-    public LocalDateTime getReserve_start_date() {
+    public ZonedDateTime getReserve_start_date() {
         return reserve_start_date;
     }
 
-    public void setReserve_start_date(LocalDateTime reserve_start_date) {
+    public void setReserve_start_date(ZonedDateTime reserve_start_date) {
         this.reserve_start_date = reserve_start_date;
     }
 
-    public LocalDateTime getReserve_end_date() {
+    public ZonedDateTime getReserve_end_date() {
         return reserve_end_date;
     }
 
-    public void setReserve_end_date(LocalDateTime reserve_end_date) {
+    public void setReserve_end_date(ZonedDateTime reserve_end_date) {
         this.reserve_end_date = reserve_end_date;
     }
 

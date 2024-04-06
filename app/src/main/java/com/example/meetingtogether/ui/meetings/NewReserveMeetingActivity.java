@@ -58,6 +58,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.TimeZone;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -89,24 +90,25 @@ public class NewReserveMeetingActivity extends AppCompatActivity {
             }
         });
 
+        String timeZone = TimeZone.getDefault().getID();
+        binding.timezone.setText(timeZone);
+
         // 현재 시간을 가져옵니다.
-        LocalDateTime now = LocalDateTime.now();
+        ZonedDateTime now = ZonedDateTime.now();
+        // 1시간 이후로 설정
+        ZonedDateTime localDateTimeAfterOneHour = now.plus(1, ChronoUnit.HOURS);
 
         // LocalDateTime을 UTC로 변환
-        ZonedDateTime utcTime = now.atZone(ZoneId.of("UTC"));
+//        ZonedDateTime utcTime = now.atZone(ZoneId.of("UTC"));
 
         // UTC 시간을 한국 표준시(KST)로 변환
-//        ZonedDateTime kstTime = utcTime.withZoneSameInstant(ZoneId.of("Asia/Seoul"));
-        ZonedDateTime kstTime = now.atZone(ZoneId.of("Asia/Seoul"));
-
-        // 1시간 이후로 설정합니다.
-        ZonedDateTime endKstTime = kstTime.plus(1, ChronoUnit.HOURS);
+//        ZonedDateTime kstTime = now.atZone(ZoneId.of("Asia/Seoul"));
 
         /** 현재 날짜로 세팅 */
-        binding.reserveStartDateView.setText(kstTime.format(dateFormatter));
-        binding.reserveStartTimeView.setText(kstTime.format(timeFormatter));
-        binding.reserveEndDateView.setText(endKstTime.format(dateFormatter));
-        binding.reserveEndTimeView.setText(endKstTime.format(timeFormatter));
+        binding.reserveStartDateView.setText(now.format(dateFormatter));
+        binding.reserveStartTimeView.setText(now.format(timeFormatter));
+        binding.reserveEndDateView.setText(localDateTimeAfterOneHour.format(dateFormatter));
+        binding.reserveEndTimeView.setText(localDateTimeAfterOneHour.format(timeFormatter));
 
         // 회의 시작 년월일 선택
         binding.reserveStartDateView.setOnClickListener(new View.OnClickListener() {
@@ -154,8 +156,17 @@ public class NewReserveMeetingActivity extends AppCompatActivity {
                 String startDateString = binding.reserveStartDateView.getText() + " " + binding.reserveStartTimeView.getText();
                 String endDateString = binding.reserveEndDateView.getText() + " " + binding.reserveEndTimeView.getText();
 
-                LocalDateTime startDate = LocalDateTime.parse(startDateString, dateTimeFormatter);
-                LocalDateTime endDate = LocalDateTime.parse(endDateString, dateTimeFormatter);
+                String timezone = binding.timezone.getText().toString();
+
+                LocalDateTime startLocalDateTime = LocalDateTime.parse(startDateString, dateTimeFormatter);
+                LocalDateTime endLocalDateTime = LocalDateTime.parse(endDateString, dateTimeFormatter);
+
+                ZonedDateTime startZonedDateTime = startLocalDateTime.atZone(ZoneId.of(timezone));
+                ZonedDateTime endZonedDateTime = endLocalDateTime.atZone(ZoneId.of(timezone));
+
+                // UTC 로 변환 하여 저장
+                ZonedDateTime utcStartTime = startZonedDateTime.withZoneSameInstant(ZoneId.of("UTC"));
+                ZonedDateTime utcEndTime = endZonedDateTime.withZoneSameInstant(ZoneId.of("UTC"));
 
                 if(title == null || "".equals(title)){
                     Toast.makeText(NewReserveMeetingActivity.this, "제목을 입력하세요.", Toast.LENGTH_SHORT).show();
@@ -164,8 +175,8 @@ public class NewReserveMeetingActivity extends AppCompatActivity {
 
                 MeetingDTO meetingDTO = new MeetingDTO();
                 meetingDTO.setTitle(title);
-                meetingDTO.setReserve_start_date(startDate);
-                meetingDTO.setReserve_end_date(endDate);
+                meetingDTO.setReserve_start_date(utcStartTime);
+                meetingDTO.setReserve_end_date(utcEndTime);
                 meetingDTO.setReserveContactList(contactList);
 
                 Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postCreateMeeting(meetingDTO);

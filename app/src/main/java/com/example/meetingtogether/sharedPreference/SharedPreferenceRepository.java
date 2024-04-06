@@ -6,6 +6,7 @@ import android.util.Log;
 import com.example.meetingtogether.model.Contact;
 import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.LocalDateTimeDeserializer;
+import com.example.meetingtogether.retrofit.ZonedDateTimeDeserializer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -13,6 +14,7 @@ import com.google.gson.reflect.TypeToken;
 import org.json.JSONObject;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +27,7 @@ public class SharedPreferenceRepository {
     public static void init(){
         GsonBuilder gsonBuilder = new GsonBuilder();
         gsonBuilder.registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer());
+        gsonBuilder.registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeDeserializer());
         gson = gsonBuilder.create();
     }
 

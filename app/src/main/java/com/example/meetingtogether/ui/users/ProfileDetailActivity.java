@@ -117,7 +117,7 @@ public class ProfileDetailActivity extends AppCompatActivity {
 //        sliderView.setScrollTimeInSec(4); //set scroll delay in seconds :
 //        sliderView.startAutoCycle();
 
-        sliderItems = profileMapList.stream().map(profileMap -> new SliderItem("https://webrtc-sfu.kro.kr/" + profileMap.getProfileImgPath())).collect(Collectors.toList());
+        sliderItems = profileMapList.stream().map(profileMap -> new SliderItem(profileMap.getProfileImgPath())).collect(Collectors.toList());
 
         adapter.renewItems(sliderItems);
 
@@ -224,10 +224,7 @@ public class ProfileDetailActivity extends AppCompatActivity {
 
             SliderItem sliderItem = mSliderItems.get(position);
 
-            Glide.with(viewHolder.itemView)
-                    .load(sliderItem.getImagePath() != null ? sliderItem.getImagePath() : R.mipmap.ic_launcher)
-                    .fitCenter()
-                    .into(viewHolder.imageView);
+            Util.loadProfile(ProfileDetailActivity.this, (ImageView) viewHolder.itemView, sliderItem.getImagePath(), CustomDialog.Type.PROFILE_IMAGE, 500, null);
 
             viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
                 @Override

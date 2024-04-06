@@ -55,7 +55,9 @@ public class MainActivity extends AppCompatActivity {
 
     public static String TAG = "TEST_SONG";
     public static String TAG_LIFE = "LIFE_TEST_SONG";
+    public static String TAG_WEBRTC = "TEST_WEBRTC";
     private NavController navController;
+    public boolean isActiveMainActivity = false;
 
     /**
      * service
@@ -158,6 +160,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        isActiveMainActivity = true;
+
         Log.d(TAG_LIFE, getClass().getSimpleName() + " onCreate");
 
         // 사용자 데이터가 없다면 로그인 페이지로 이동
@@ -244,22 +248,24 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onAlertMsg(String msg) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                        builder.setTitle("알림")
-                                .setMessage(msg)
-                                .setPositiveButton("확인", new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialogInterface, int i) {
+                if(isActiveMainActivity){
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                            builder.setTitle("알림")
+                                    .setMessage(msg)
+                                    .setPositiveButton("확인", new DialogInterface.OnClickListener() {
+                                        @Override
+                                        public void onClick(DialogInterface dialogInterface, int i) {
 
-                                    }
-                                })
-                                .create()
-                                .show();
-                    }
-                });
+                                        }
+                                    })
+                                    .create()
+                                    .show();
+                        }
+                    });
+                }
             }
         });
     }
@@ -281,6 +287,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        isActiveMainActivity = false;
 
         Log.d(TAG_LIFE, getClass().getSimpleName() + " onDestroy");
 

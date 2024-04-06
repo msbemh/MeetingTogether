@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
@@ -19,6 +20,7 @@ public class RetrofitService {
         Gson gson = new GsonBuilder()
                 .setLenient()
                 .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer())
+                .registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeDeserializer())
                 .create();
 
         OkHttpClient client = new OkHttpClient.Builder()

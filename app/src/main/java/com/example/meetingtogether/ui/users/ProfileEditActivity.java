@@ -410,7 +410,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         Util.loadProfile(this, binding.profileImage, userProfileMap, CustomDialog.Type.PROFILE_IMAGE);
 
         // 배경 이미지 로드
-        Util.loadProfile(this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE);
+        Util.loadProfile(ProfileEditActivity.this, binding.backgroundImage, backgroundProfileMap, CustomDialog.Type.BACKGROUND_IMAGE, 500, null);
 
         permissionLauncher.launch(PERMISSIONS);
     }
@@ -484,8 +484,8 @@ public class ProfileEditActivity extends AppCompatActivity {
     private void dispatchTakePictureCameraIntent() {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
 
+        activityResultLauncher.launch(intent);
         if (intent.resolveActivity(getPackageManager()) != null) {
-            activityResultLauncher.launch(intent);
         }
     }
 

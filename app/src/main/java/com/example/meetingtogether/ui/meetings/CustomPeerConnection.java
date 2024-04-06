@@ -1,8 +1,11 @@
 package com.example.meetingtogether.ui.meetings;
 
 import static com.example.meetingtogether.MainActivity.TAG;
+import static com.example.meetingtogether.common.Util.WEBRTC_PEER;
 
 import android.util.Log;
+
+import com.example.meetingtogether.ui.meetings.DTO.UserModel;
 
 import org.webrtc.CandidatePairChangeEvent;
 import org.webrtc.DataChannel;
@@ -21,8 +24,9 @@ public class CustomPeerConnection {
     private String clientId;
     private String type;
     private DataChannel dataChannel;
+    private UserModel userModel;
 
-    public CustomPeerConnection(PeerConnectionFactory factory, String clientId, String type, Observer observer){
+    public CustomPeerConnection(PeerConnectionFactory factory, String clientId, String type, UserModel userModel, Observer observer){
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
 
         String STUN_URL = "stun:stun.l.google.com:19302";
@@ -31,6 +35,7 @@ public class CustomPeerConnection {
         this.observer = observer;
         this.clientId = clientId;
         this.type = type;
+        this.userModel = userModel;
 
         String TURN_URL = "turn:webrtc-sfu.kro.kr?transport=tcp";
         String userName = "song";
@@ -99,6 +104,8 @@ public class CustomPeerConnection {
 
         this.peerConnection = factory.createPeerConnection(rtcConfig, pcObserver);
 
+        Log.d(WEBRTC_PEER, "피어(" + clientId + "," + type + "," + userModel.getName() + ")가 생성 됐습니다.");
+
         DataChannel.Init init = new DataChannel.Init();
         init.ordered = true;
         init.negotiated = false;
@@ -110,6 +117,7 @@ public class CustomPeerConnection {
         DataChannel dataChannel = this.peerConnection.createDataChannel(clientId + "(" + type + ")", init);
         setDataChannel(dataChannel);
         Log.d(TAG, "데이터 채널 생성 완료");
+        Log.d(WEBRTC_PEER, "데이터 채널(" + clientId + "," + type + "," + userModel.getName() + ")이 생성 됐습니다.");
     }
 
     public PeerConnection getPeerConnection(){

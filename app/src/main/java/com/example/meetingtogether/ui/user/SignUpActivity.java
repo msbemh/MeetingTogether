@@ -7,6 +7,7 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -33,6 +34,8 @@ import com.example.meetingtogether.model.User;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
 import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
+import com.google.android.gms.auth.api.identity.GetSignInIntentRequest;
+import com.google.android.gms.auth.api.identity.Identity;
 
 import java.util.Calendar;
 import java.util.Date;
@@ -158,7 +161,7 @@ public class SignUpActivity extends AppCompatActivity {
                 }
 
                 /** 서버로 OTP 요청 */
-                String phoneNum = getPhoneNum();
+                String phoneNum = Util.getPhoneNum();
                 Call<CommonRetrofitResponse> call = RetrofitService.getInstance().getService().postReqOtp(phoneNum);
                 call.enqueue(new Callback<CommonRetrofitResponse>() {
                     @Override
@@ -201,7 +204,7 @@ public class SignUpActivity extends AppCompatActivity {
                                             }
                                         } catch (InterruptedException e) {
                                             e.printStackTrace();
-                                            Log.d(TAG, e.getMessage());
+                                            Log.e(TAG, e.getMessage());
                                         }
                                     }
                                 }
@@ -371,7 +374,7 @@ public class SignUpActivity extends AppCompatActivity {
 //                String cryptoPassword = cryptoInfo[0];
 //                String salt = cryptoInfo[1];
 
-                String phoneNum = getPhoneNum();
+                String phoneNum = Util.getPhoneNum();
 
                 User user = new User(email, cryptoPassword, name, phoneNum);
                 Util.showDialog(SignUpActivity.this, binding.signUpConstraintLayout);
@@ -409,21 +412,21 @@ public class SignUpActivity extends AppCompatActivity {
         permissionLauncher.launch(PERMISSIONS);
     }
 
-    private String getPhoneNum() {
-        String phoneNum = "";
-        TelephonyManager telManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS) != PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "전화번호 읽기 권한이 필요합니다.ㅣ",Toast.LENGTH_SHORT).show();
-            return null;
-        }
-
-        // 전화번호 정보 가져오기
-        phoneNum = telManager.getLine1Number();
-        if(phoneNum.startsWith("+82")) {
-            phoneNum = phoneNum.replace("+82", "0");
-        }
-        return phoneNum;
-    }
+//    private String getPhoneNum() {
+//        String phoneNum = "";
+//        TelephonyManager telManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+//        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED
+//                && ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS) != PackageManager.PERMISSION_GRANTED
+//                && ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+//            Toast.makeText(this, "전화번호 읽기 권한이 필요합니다.ㅣ",Toast.LENGTH_SHORT).show();
+//            return null;
+//        }
+//
+//        // 전화번호 정보 가져오기
+//        phoneNum = telManager.getLine1Number();
+//        if(phoneNum.startsWith("+82")) {
+//            phoneNum = phoneNum.replace("+82", "0");
+//        }
+//        return phoneNum;
+//    }
 }

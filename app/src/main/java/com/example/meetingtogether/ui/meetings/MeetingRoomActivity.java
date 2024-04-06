@@ -1,6 +1,7 @@
 package com.example.meetingtogether.ui.meetings;
 
 import static com.example.meetingtogether.MainActivity.TAG;
+import static com.example.meetingtogether.MainActivity.TAG_WEBRTC;
 import static com.example.meetingtogether.MainActivity.mChatService;
 import static com.example.meetingtogether.common.Common.CHAT;
 import static com.example.meetingtogether.common.Common.HOST;
@@ -10,6 +11,9 @@ import static com.example.meetingtogether.common.Common.ROOMID;
 import static com.example.meetingtogether.common.Common.ROOM_NAME;
 import static com.example.meetingtogether.common.Common.VIDEO;
 import static com.example.meetingtogether.common.Common.WHITE_BOARD;
+import static com.example.meetingtogether.common.Util.DRAW_TAG;
+import static com.example.meetingtogether.common.Util.WEBRTC_PEER;
+import static com.example.meetingtogether.common.Util.WEBRTC_WHITEBOARD;
 import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.gson;
 
 import android.Manifest;
@@ -24,6 +28,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.res.ColorStateList;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -37,6 +43,7 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.graphics.YuvImage;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.BitmapDrawable;
@@ -85,8 +92,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -430,6 +439,27 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 MeetingRoomActivity.this.peersBinding = peersBinding;
                 viewGroup = (ViewGroup) peersBinding.mainSurfaceView.getParent();
 
+                MeetingRoomActivity.this.peersBinding.layout.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MeetingRoomActivity.this, "클릭 테스트", Toast.LENGTH_SHORT);
+                            }
+                        });
+                    }
+                });
+
+                MeetingRoomActivity.this.peersBinding.layout.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+                    @Override
+                    public void onScrollChange(View view, int i, int i1, int i2, int i3) {
+                        Toast.makeText(MeetingRoomActivity.this, "스코롤 테스트", Toast.LENGTH_SHORT);
+                    }
+                });
+
+                Log.d(WEBRTC_PEER, "피어를 보여주기 위한 프래그먼트가 생성 됐습니다.");
+
                 // 로컬 세팅 시작
                 localSetting();
             }
@@ -437,7 +467,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onError(Exception e) {
                 e.printStackTrace();
-                Log.e(TAG, e.getMessage());
+                Log.e(WEBRTC_PEER, e.getMessage());
             }
         });
 
@@ -445,6 +475,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         whiteboardFragment = WhiteboardFragment.newInstance(new WhiteboardFragment.CreateResultInterface() {
             @Override
             public void onCreated(FragmentWhiteboardBinding whiteboardBinding, ColorModel colorModel) {
+                Log.d(WEBRTC_WHITEBOARD, "화이트보드 프래그먼트가 생성 됐습니다.");
                 MeetingRoomActivity.this.whiteboardBinding = whiteboardBinding;
                 MeetingRoomActivity.this.initDrawingView(colorModel);
             }
@@ -495,6 +526,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         // 연결된 피어 모두애게 그리기 정보를 보낸다.
                         for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
                             CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+
+                            // 메시지를 보낼때 일반 피어들만 메시지를 보낼 수있도록한다.
+                            // screen 피어도 보내면 메시지를 2번 보내게 된다.
+                            if(!customPeerConnection.getType().equals(VIDEO)) continue;
+
                             DataChannel dataChannel = customPeerConnection.getDataChannel();
                             String cmd = "chat";
                             String type = "txt";
@@ -567,25 +603,25 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 Log.d(TAG, "Glide 동작");
                                 // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
                                 Glide
-                                        .with(MeetingRoomActivity.this)
-                                        .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
-                                        /** Glide는 원본 비율을 유지한다. */
-                                        .override(500,500)
-                                        .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
-                                        .listener(new RequestListener<Drawable>() {
-                                            @Override
-                                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                                                // 이미지 로딩에 실패했을 때 수행할 작업
-                                                return false;
-                                            }
+                                    .with(MeetingRoomActivity.this)
+                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    /** Glide는 원본 비율을 유지한다. */
+                                    .override(500,500)
+                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                    .listener(new RequestListener<Drawable>() {
+                                        @Override
+                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                            // 이미지 로딩에 실패했을 때 수행할 작업
+                                            return false;
+                                        }
 
-                                            @Override
-                                            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                                Log.d(TAG, "Glide 이미지 로드 완료");
-                                                return false;
-                                            }
-                                        })
-                                        .into(binding.msgImage);
+                                        @Override
+                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                            Log.d(TAG, "Glide 이미지 로드 완료");
+                                            return false;
+                                        }
+                                    })
+                                    .into(binding.msgImage);
 
                             } else {
                                 binding.msgContent.setVisibility(View.VISIBLE);
@@ -598,8 +634,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 binding.receiveDate.setText(messageModel.getDate());
                             }
 
-                            binding.name.setText(messageModel.getSender().getClientId());
-                            // 보낸 메시지
+                            UserModel sender = messageModel.getSender();
+                            binding.name.setText(sender.getName());
+                            String imgPath = sender.getImgPath();
+                            Util.loadProfile(MeetingRoomActivity.this, binding.profile, imgPath, CustomDialog.Type.PROFILE_IMAGE);
+                        // 보낸 메시지
                         } else {
                             SendMessageRowItemBinding binding = (SendMessageRowItemBinding) (holder.sendBinding);
 
@@ -612,23 +651,23 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 // 이미지 glide 를 이용하여 서버 url에 있는 이미지 비동기적으로 로드
                                 // 여기선 메시지 1개당 이미지 1개이기 때문에 항상 0 인덱스이다.
                                 Glide
-                                        .with(MeetingRoomActivity.this)
-                                        .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
-                                        .override(500,500)
-                                        .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
-                                        .listener(new RequestListener<Drawable>() {
-                                            @Override
-                                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                                                // 이미지 로딩에 실패했을 때 수행할 작업
-                                                return false;
-                                            }
+                                    .with(MeetingRoomActivity.this)
+                                    .load("https://webrtc-sfu.kro.kr:3030/images/" + filename)
+                                    .override(500,500)
+                                    .thumbnail(Glide.with(MeetingRoomActivity.this).load(R.raw.loading))
+                                    .listener(new RequestListener<Drawable>() {
+                                        @Override
+                                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                                            // 이미지 로딩에 실패했을 때 수행할 작업
+                                            return false;
+                                        }
 
-                                            @Override
-                                            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                                                return false;
-                                            }
-                                        })
-                                        .into(binding.msgImage);
+                                        @Override
+                                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                                            return false;
+                                        }
+                                    })
+                                    .into(binding.msgImage);
                             } else {
                                 binding.msgContent.setVisibility(View.VISIBLE);
                                 binding.msgImage.setVisibility(View.GONE);
@@ -790,6 +829,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                                 // 연결된 피어 모두애게 그리기 정보를 보낸다.
                                                 for (int i = 0; i < MeetingRoomActivity.peerConnections.size(); i++) {
                                                     CustomPeerConnection customPeerConnection = MeetingRoomActivity.peerConnections.get(i);
+
+                                                    // 메시지를 보낼때 일반 피어들만 메시지를 보낼 수있도록한다.
+                                                    // screen 피어도 보내면 메시지를 2번 보내게 된다.
+                                                    if(!customPeerConnection.getType().equals(VIDEO)) continue;
+
                                                     DataChannel dataChannel = customPeerConnection.getDataChannel();
                                                     String cmd = "chat";
                                                     String type = "img";
@@ -950,7 +994,47 @@ public class MeetingRoomActivity extends AppCompatActivity {
             meetingService.setMediaProjection(mediaProjectionResultCode, mediaProjectionResultData, mediaProjectionManager);
             meetingService.setContext(MeetingRoomActivity.this);
 
+            SurfaceTextureHelper surfaceTextureHelper =
+                    SurfaceTextureHelper.create("VideoThread-share", rootEglBase.getEglBaseContext());
+
+            int[] textures = new int[1];
+            GLES20.glGenTextures(1, textures, 0);
+            YuvConverter yuvConverter = new YuvConverter();
+
+            long start = System.nanoTime();
+            TextureBufferImpl buffer = new TextureBufferImpl(VIDEO_RESOLUTION_HEIGHT, VIDEO_RESOLUTION_WIDTH, VideoFrame.TextureBuffer.Type.RGB, textures[0], new Matrix(), surfaceTextureHelper.getHandler(), yuvConverter, null);
+
             meetingService.setInterface(new MeetingService.MeetingServiceResult() {
+                @Override
+                public void onFrame(VideoFrame frame) {
+                    Bitmap bitmap = convertVideoFrameToBitmap(frame);
+                    Canvas canvas = new Canvas(bitmap);
+
+                    // 좌우 상하 반전
+                    Matrix matrix = new Matrix();
+                    matrix.setScale(1, -1);
+
+                    // 이미지 회전
+                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, false);
+                    Bitmap copyBitmap2 = bitmap;
+
+                    surfaceTextureHelper.getHandler().post(() -> {
+                        // 텍스처를 바인딩합니다.
+                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
+                        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+                        // 텍스처의 크기가 매핑되는 삼각형과의 크기가 맞지 않을 경우 축소하거나 확대할 때 어떤 식으로 필터링할 것인지 결정
+                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, copyBitmap2, 0);
+
+                        VideoFrame.I420Buffer i420Buf = yuvConverter.convert(buffer);
+
+                        long frameTime = System.nanoTime() - start;
+                        VideoFrame videoFrame = new VideoFrame(i420Buf, 0, frameTime);
+                        meetingService.onFrameCaptured(videoFrame);
+
+                        videoFrame.release();
+                    });
+                }
+
                 @Override
                 public void onScreenCapturerCreated(CustomCapturer customCapturer) {
                     Log.d(TAG, "screenCapturer 얻어옴");
@@ -1163,16 +1247,26 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 VideoTrack videoTrack = getCustomTrack(Common.VIDEO).getVideoTrack();
-                if (isVideoOn) {
-                    videoTrack.setEnabled(false);
+                ProxySink proxySink = getProxySink("local", VIDEO);
+                ImageView userProfileImageView = (ImageView) proxySink.getFrameLayout().getChildAt(3);
 
+                if (isVideoOn) {
+                    // 비디오를 끈다
+                    videoTrack.setEnabled(false);
                     binding.cameraImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
+                    userProfileImageView.setVisibility(View.VISIBLE);
+
                     isVideoOn = false;
                 } else {
+                    // 비디오를 켠다
                     videoTrack.setEnabled(true);
                     binding.cameraImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
+                    userProfileImageView.setVisibility(View.GONE);
+
                     isVideoOn = true;
                 }
+
+                broadcastVideoState();
             }
         });
 
@@ -1180,15 +1274,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 AudioTrack audioTrack = getCustomTrack(Common.VIDEO).getAudioTrack();
+
+                ProxySink myProxySink = getProxySink("local", Common.VIDEO);
+                FrameLayout myFrameLayout = myProxySink.getFrameLayout();
+
+                // 오디오 imageView 는 항상 index 1 위치에 존재한다.
+                ImageView audioMuteImageView = (ImageView) myFrameLayout.getChildAt(1);
+
                 if (isAudioOn) {
+                    // 오디오를 끈다.
                     audioTrack.setEnabled(false);
+
+                    audioMuteImageView.setVisibility(View.VISIBLE);
+
                     binding.audioImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
                     isAudioOn = false;
                 } else {
+                    // 오디로를 킨다.
                     audioTrack.setEnabled(true);
+
+                    audioMuteImageView.setVisibility(View.GONE);
+
                     binding.audioImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
                     isAudioOn = true;
                 }
+                broadcastAudioState();
             }
         });
 
@@ -1322,6 +1432,24 @@ public class MeetingRoomActivity extends AppCompatActivity {
         String formatedNow = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
 
         return formatedNow;
+    }
+
+    private void broadcastAudioState(){
+        for(CustomPeerConnection customPeerConnection : peerConnections){
+//            Log.d(TAG_WEBRTC, "오디오 상태 브로드 캐스트");
+            String cmd = "audio_state_send" + ";" + isAudioOn;
+            ByteBuffer buffer = ByteBuffer.wrap(cmd.getBytes());
+            customPeerConnection.getDataChannel().send(new DataChannel.Buffer(buffer, false));
+        }
+    }
+
+    private void broadcastVideoState(){
+        for(CustomPeerConnection customPeerConnection : peerConnections){
+//            Log.d(TAG_WEBRTC, "오디오 상태 브로드 캐스트");
+            String cmd = "video_state_send" + ";" + isVideoOn;
+            ByteBuffer buffer = ByteBuffer.wrap(cmd.getBytes());
+            customPeerConnection.getDataChannel().send(new DataChannel.Buffer(buffer, false));
+        }
     }
 
     private void calculateFaceInfo(List<Face> faces, Bitmap bitmap) {
@@ -1603,12 +1731,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
         disconnect();
 
         // 시스템 화면에 보이는 SurfaceView를 끈다.
-        toggleMainSurfaceView(false);
+        // toggleMainSurfaceView(false);
 
         super.onDestroy();
     }
-
-    private ProxySink remoteProxySink;
 
     private void localSetting() {
         // 미디어 설정 초기화
@@ -1626,42 +1752,46 @@ public class MeetingRoomActivity extends AppCompatActivity {
         // 트랙 생성
         CustomTrack customTrack = createTrack(Common.VIDEO);
 
-        // 프록시 싱크 생성
-        createProxySink("local", Common.VIDEO);
-
-        // 트랙과 view 연동
-        bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
-
         // 처음 들어올 때 화상회의 켰냐 안켰냐의 설정에 따라 설정
         VideoTrack videoTrack = customTrack.getVideoTrack();
         videoTrack.setEnabled(isActivateCamera);
         isVideoOn = isActivateCamera;
 
-        if(isActivateCamera){
-            binding.cameraImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
-        }else{
-            binding.cameraImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
-        }
+        // 프록시 싱크 생성
+        ProxySink proxySink = createProxySink("local", Common.VIDEO);
+
+        // 프록시 싱크에 들어가는 컴포넌트 설정
+        proxyComponentSetting(proxySink);
+
+        // 트랙과 view 연동
+        bindTrackAndView("local", customTrack.getType(), peersBinding.mainSurfaceView, null);
 
         AudioTrack audioTrack = customTrack.getAudioTrack();
         audioTrack.setEnabled(true);
         isAudioOn = true;
-        binding.audioImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
 
-        /** Remote View 를 위한 설정 */
-        remoteProxySink = createProxySink("remoteLocal", Common.VIDEO);
-        remoteProxySink.setVideoTrack(customTrack.getVideoTrack());
-        remoteProxySink.setTarget(remoteCustomSurfaceViewRenderer);
-        // 카메라 비디오 트랙 <=> ProxySink <=> SurfaceView
-        customTrack.getVideoTrack().addSink(remoteProxySink);
+        /** Window SurfaceView 를 위한 설정 */
+        ProxySink windowsProxySink = createProxySink("windowLocal", Common.VIDEO);
 
-        remoteCustomSurfaceViewRenderer.setOnLongClickListener(new View.OnLongClickListener() {
+        // 프록시 싱크에 들어가는 컴포넌트 설정
+        proxyComponentSetting(windowsProxySink);
+
+        // 트랙과 view 연동
+        bindTrackAndView("windowLocal", customTrack.getType(), windowCustomSurfaceViewRenderer, null);
+
+        // Remote View 클릭 이벤트 추가
+        setRemoteViewRendererEvent(windowsProxySink);
+    }
+
+    private void setRemoteViewRendererEvent(ProxySink windowsProxySink){
+        FrameLayout frameLayout = windowsProxySink.getFrameLayout();
+        frameLayout.setOnLongClickListener(new View.OnLongClickListener() {
             private int initialX = 0;
             private int initialY = 0;
 
             @Override
             public boolean onLongClick(View view) {
-                remoteCustomSurfaceViewRenderer.setOnTouchListener(new View.OnTouchListener() {
+                frameLayout.setOnTouchListener(new View.OnTouchListener() {
                     float initialTouchX = 0;
                     float initialTouchY = 0;
                     @Override public boolean onTouch(View v, MotionEvent event) {
@@ -1680,18 +1810,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
 //                        Log.d(TAG, "initialTouchY:" + initialTouchY);
 //                                return true;
                             case MotionEvent.ACTION_UP:
-                                remoteCustomSurfaceViewRenderer.setOnTouchListener(null);
+                                frameLayout.setOnTouchListener(null);
                                 initialX = params.x;
                                 initialY = params.y;
                                 return true;
                             case MotionEvent.ACTION_MOVE:
-                        Log.d(TAG, "[ACTION_MOVE]");
+                                Log.d(TAG, "[ACTION_MOVE]");
 //                        Log.d(TAG, "initialX:" + initialX);
 //                        Log.d(TAG, "initialY:" +initialY);
-                        Log.d(TAG, "event.getRawX():" +event.getRawX());
-                        Log.d(TAG, "event.getRawY() :" +event.getRawY() );
-                        Log.d(TAG, "[전]initialTouchX :" +initialTouchX );
-                        Log.d(TAG, "[전]initialTouchY :" +initialTouchY );
+                                Log.d(TAG, "event.getRawX():" +event.getRawX());
+                                Log.d(TAG, "event.getRawY() :" +event.getRawY() );
+                                Log.d(TAG, "[전]initialTouchX :" +initialTouchX );
+                                Log.d(TAG, "[전]initialTouchY :" +initialTouchY );
                                 if(initialTouchX == 0 && initialTouchY == 0){
                                     initialTouchX = event.getRawX();
                                     initialTouchY = event.getRawY();
@@ -1700,10 +1830,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 Log.d(TAG, "[후]initialTouchY :" +initialTouchY );
                                 params.x = initialX + (int) (event.getRawX() - initialTouchX);
                                 params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        Log.d(TAG, "params.x:" + params.x);
-                        Log.d(TAG, "params.y:" + params.y);
+                                Log.d(TAG, "params.x:" + params.x);
+                                Log.d(TAG, "params.y:" + params.y);
                                 WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-                                windowManager.updateViewLayout(remoteCustomSurfaceViewRenderer, params);
+                                windowManager.updateViewLayout(frameLayout, params);
                                 return true;
                         }
                         return false;
@@ -1713,7 +1843,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
-        remoteCustomSurfaceViewRenderer.setOnClickListener(new View.OnClickListener() {
+        frameLayout.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(MeetingRoomActivity.this, MeetingRoomActivity.class);
@@ -1744,6 +1874,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
         String typeFlag = getTypeTag(type);
         Log.d(TAG, typeFlag + "캡처러 생성 완료");
+
+        Log.d(WEBRTC_PEER, "카메라(" + type + ")이 생성 됐습니다.");
 
         SurfaceTextureHelper surfaceTextureHelper =
                 SurfaceTextureHelper.create("VideoThread" + type, rootEglBase.getEglBaseContext());
@@ -1918,25 +2050,237 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     private ProxySink createProxySink(String clientId, String type) {
-        ProxySink proxySink = new ProxySink(clientId, type);
+        ProxySink proxySink = null;
+
+        if("local".equals(clientId)){
+            proxySink = new ProxySink(clientId, type, peersBinding.mainFrameLayout, MeetingRoomActivity.this, binding.mainFrameLayout.getWidth());
+        }else if("windowLocal".equals(clientId)){
+            proxySink = new ProxySink(clientId, type,MeetingRoomActivity.this, 100);
+        }else{
+            proxySink = new ProxySink(clientId, type, MeetingRoomActivity.this, peersBinding.layout.getHeight());
+        }
+
         String tagFlag = getTagFlagString(clientId, type);
 
         Log.d(TAG, tagFlag + "프록시 싱크 생성 완료");
 
+        Log.d(WEBRTC_PEER, "ProxySink(" + clientId + "," + type + ")이 생성 됐습니다.");
+
         proxySinks.add(proxySink);
 
-        Log.d(TAG, tagFlag + "프록시 싱크 추가완료:" + proxySinks);
+        Log.d(WEBRTC_PEER, "현재 ProxySinks : " + proxySinks);
 
         return proxySink;
+    }
+
+    private void proxyComponentSetting(ProxySink proxySink){
+        String clientId = proxySink.getClientId();
+        FrameLayout frameLayout = proxySink.getFrameLayout();
+
+        String type = proxySink.getType();
+        String tagFlag = getTagFlagString(clientId, type);
+
+        TextView userNameTextView = null;
+        ImageView userProfileImageView = null;
+        SurfaceViewRenderer surfaceViewRenderer = null;
+        String imgPath = null;
+        String userName = null;
+        ImageView audioImgView = null;
+
+        //
+        if("local".equals(clientId) || "windowLocal".equals(clientId)){
+            userNameTextView = peersBinding.userName;
+            if("local".equals(clientId)){
+                surfaceViewRenderer = peersBinding.mainSurfaceView;
+            }else if("windowLocal".equals(clientId)){
+                surfaceViewRenderer = windowCustomSurfaceViewRenderer;
+            }
+            audioImgView = peersBinding.muteMicImg;
+            userProfileImageView = peersBinding.userImage;
+
+            imgPath = Util.user.getMyProfileMap().getProfileImgPath();
+            userName = Util.user.getName();
+        }else{
+            /**
+             * 원격 SurfaceView 생성
+             */
+            surfaceViewRenderer = new SurfaceViewRenderer(MeetingRoomActivity.this);
+            surfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
+            surfaceViewRenderer.setEnableHardwareScaler(true);
+            surfaceViewRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
+            //surfaceViewRenderer.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(MeetingRoomActivity.this, R.color.orange)));
+            // 화면 공유의 경우 자동으로 반전되서 한번더 반전 시키자.
+            if (Common.SCREEN.equals(type)){
+                surfaceViewRenderer.setMirror(false);
+            }else{
+                surfaceViewRenderer.setMirror(true);
+            }
+
+            Log.d(WEBRTC_PEER, "SurfaceViewRenderer (" + surfaceViewRenderer + ")가 생성 됐습니다." );
+
+            /**
+             * [레이아웃 파라미터 생성]
+             * SurfaceView의 길이, 높이 설정
+             */
+//                final int height = (int) peersBinding.layout.getHeight();
+//                final int width = (int) height;
+//
+//                LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
+//                surfaceViewRenderer.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
+
+            surfaceViewRenderer.getHolder().addCallback(new SurfaceHolder.Callback() {
+                @Override
+                public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+                    Log.d(TAG, tagFlag + "surfaceCreated");
+                }
+
+                @Override
+                public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+                }
+
+                @Override
+                public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+                    Log.d(TAG, tagFlag + "surfaceDestroyed");
+                }
+            });
+
+            // 클릭 이벤트 추가
+            SurfaceViewRenderer finalSurfaceViewRenderer = surfaceViewRenderer;
+            surfaceViewRenderer.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+//                        Toast.makeText(MeetingRoomActivity.this, clickedClientId + "화면 클릭!!",Toast.LENGTH_SHORT).show();
+                    setSwappedFeeds(finalSurfaceViewRenderer, null);
+                }
+            });
+
+            Log.d(TAG, tagFlag + "ProxySink(" + proxySink + "," + proxySink.getType() + ")와 SurfaceViewRenderer(" + surfaceViewRenderer + ")를 연동합니다.");
+
+            /**
+             * 사용자명 TextView 생성
+             */
+            userNameTextView = new TextView(MeetingRoomActivity.this);
+            userNameTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            userNameTextView.setTextColor(Color.WHITE);
+            userNameTextView.setBackgroundColor(ContextCompat.getColor(MeetingRoomActivity.this, R.color.black));
+            userNameTextView.setTypeface(null, Typeface.BOLD);
+
+            // LayoutParams 가져오기
+            FrameLayout.LayoutParams userNameTextViewParams = (FrameLayout.LayoutParams) new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+            );
+            userNameTextViewParams.gravity =  Gravity.BOTTOM;
+            userNameTextView.setLayoutParams(userNameTextViewParams);
+
+
+            UserModel userModel = getUserModel(clientId);
+            userName = userModel.getName();
+
+            /**
+             * 사용자 프로필 ImageView 생성
+             */
+            imgPath = userModel.getImgPath();
+            // ImageView 객체 생성
+            userProfileImageView = new ImageView(MeetingRoomActivity.this);
+
+            // 이미지뷰의 너비와 높이 설정 (옵션)
+            Resources r = getResources();
+            int userProfileWidth = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, r.getDisplayMetrics());
+            int userProfileHeight = userProfileWidth;
+            FrameLayout.LayoutParams userProfileLatoutParam = new FrameLayout.LayoutParams(userProfileWidth, userProfileHeight);
+            userProfileLatoutParam.gravity = Gravity.CENTER;
+            userProfileImageView.setLayoutParams(userProfileLatoutParam);
+            userProfileImageView.setVisibility(View.GONE);
+
+            /**
+             * 마이크 음소거 표시를 위한 ImageView 생성
+             */
+            // ImageView 객체 생성
+            audioImgView = new ImageView(MeetingRoomActivity.this);
+
+            // 이미지 설정
+            audioImgView.setImageResource(R.drawable.mute_microphone_red);
+            audioImgView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            audioImgView.setVisibility(View.GONE);
+
+            // 이미지뷰의 너비와 높이 설정 (옵션)
+            int imageWidth = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, r.getDisplayMetrics());
+            int imageHeight = imageWidth;
+            FrameLayout.LayoutParams audioImgViewLayoutParams = new FrameLayout.LayoutParams(imageWidth, imageHeight);
+            audioImgViewLayoutParams.gravity = Gravity.BOTTOM;
+            audioImgViewLayoutParams.leftMargin = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, r.getDisplayMetrics());
+            audioImgView.setLayoutParams(audioImgViewLayoutParams);
+
+        }
+
+        /**
+         * SurfaceViewRenderer 세팅 (0)
+         */
+        if(!"local".equals(clientId)){
+            frameLayout.addView(surfaceViewRenderer);
+        }
+
+        /**
+         * AudioImage 세팅 (1)
+         */
+        if(!"local".equals(clientId) && !"windowLocal".equals(clientId)){
+            frameLayout.addView(audioImgView);
+        }
+
+        /**
+         * 사용자명 세팅 (2)
+         */
+        userNameTextView.setText(userName);
+        if(!"local".equals(clientId) && !"windowLocal".equals(clientId)){
+            frameLayout.addView(userNameTextView);
+        }
+
+        /**
+         * 사용자 프로필 세팅 (3)
+         */
+        if(!"local".equals(clientId) && !"windowLocal".equals(clientId)){
+            frameLayout.addView(userProfileImageView);
+        }
+        Util.loadProfile(MeetingRoomActivity.this, userProfileImageView, imgPath, CustomDialog.Type.PROFILE_IMAGE);
+
+        /**
+         * 오디오/비디오 on/off 설정
+         */
+        if("local".equals(clientId) || "windowLocal".equals(clientId)){
+            if(isAudioOn){
+                binding.audioImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
+                audioImgView.setVisibility(View.GONE);
+            }else{
+                binding.audioImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
+                audioImgView.setVisibility(View.VISIBLE);
+            }
+
+            if(isVideoOn){
+                binding.cameraImageView.setColorFilter(Color.GREEN, PorterDuff.Mode.SRC_IN);
+                userProfileImageView.setVisibility(View.GONE);
+            }else{
+                binding.cameraImageView.setColorFilter(Color.BLACK, PorterDuff.Mode.SRC_IN);
+                userProfileImageView.setVisibility(View.VISIBLE);
+            }
+        // 다른 상대방의 오디오/비디오 프로필은 데이터 채널을 통해 상대방 상태에 따라 반영한다.
+        }else{
+            // 레이아웃에 추가
+            ViewGroup layout = peersBinding.layout;
+            layout.addView(frameLayout);
+        }
     }
 
     private void bindTrackAndView(String clientId, String type, SurfaceViewRenderer surfaceViewRenderer, VideoTrack remoteVideoTrack) {
         ProxySink proxySink = getProxySink(clientId, type);
         String tagFlag = getTagFlagString(clientId, type);
 
-        if (clientId.equals("local")) {
+        if (clientId.equals("local") || clientId.equals("windowLocal")) {
             proxySink.setTarget(surfaceViewRenderer);
             Log.d(TAG, tagFlag + "surfaceViewRenderer:" + surfaceViewRenderer);
+
+            Log.d(WEBRTC_PEER, "ProxySink(" + proxySink + "," + proxySink.getType() + ") <=> SurfaceViewRender(" + surfaceViewRenderer + ") 를 연동 했습니다.");
+
             CustomTrack customTrack = getCustomTrack(type);
             VideoTrack videoTrack = customTrack.getVideoTrack();
             proxySink.setVideoTrack(videoTrack);
@@ -2152,6 +2496,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                 if (!isExistUser(userModel.clientId)) {
                                     // 새로운 유저 추가
                                     Log.d(TAG, "[USER]" + userModel.clientId + "추가");
+                                    Log.d(WEBRTC_PEER, "사용자(" + userModel.clientId + "," + userModel.getName() + ")이 참가했습니다.");
+                                    Log.d(WEBRTC_PEER, "현재 userList : " + userList);
                                     userList.add(userModel);
                                 }
 
@@ -2538,6 +2884,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
             SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
             String type = proxySink.getType();
 
+            Log.d(TAG_WEBRTC, "현재 for문 : " + getTagFlagString(clientId, type));
+
             if (surfaceViewRenderer == peersBinding.mainSurfaceView) {
                 // UI Thread에서 작업이 완료 되면 Callback 동작
                 exchangeSurfaceView(clientId, type, new SwapResult() {
@@ -2546,7 +2894,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                      */
                     @Override
                     public void onSuccess(SurfaceViewRenderer pSurfaceViewRenderer) {
-                        removeSurfaceView(clientId);
+                        Log.d(TAG_WEBRTC, "스왑 성공으로 surfaceview 제거 시작");
+                        removeSurfaceView(clientId, type);
                     }
 
                     @Override
@@ -2556,7 +2905,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                 });
             } else {
                 if (surfaceViewRenderer != null) {
-                    removeSurfaceView(clientId);
+                    Log.d(TAG_WEBRTC, getTagFlagString(clientId, type) + "스왑이 필요없으므로 바로 surfaceview 제거 시작");
+                    removeSurfaceView(clientId, type);
                 }
             }
         }
@@ -2659,12 +3009,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private void exchangeSurfaceView(String clientId, String type, SwapResult swapResult) {
         String tagFlag = getTagFlagString(clientId, type);
 
-        Log.d(TAG, tagFlag + "해당 피어가 갖고 있는 SurfaceView 는 메인 View 입니다.");
-        Log.d(TAG, tagFlag + "그렇기 때문에 다른 SurfaceView 로 대체 해야 합니다.");
+        Log.d(TAG_WEBRTC, tagFlag + "해당 피어가 갖고 있는 SurfaceView 는 메인 View 입니다.");
+        Log.d(TAG_WEBRTC, tagFlag + "그렇기 때문에 다른 SurfaceView 로 대체 해야 합니다.");
 
         // 메인 view의 clientId가 아닌 ProxySink를 가져온다.
         ProxySink anotherProxySink = getAnotherProxySink(clientId);
-        Log.d(TAG, "[peer:" + anotherProxySink.getClientId() + "] <=> [peer:" + clientId + "] SurfaceView 교체");
+        Log.d(TAG_WEBRTC, "[peer:" + anotherProxySink.getClientId() + "] <=> [peer:" + clientId + "] SurfaceView 교체");
 
         /**
          * 프록시 교환
@@ -2687,42 +3037,24 @@ public class MeetingRoomActivity extends AppCompatActivity {
         });
     }
 
-    private void removeSurfaceView(String targetId) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < proxySinks.size(); i++) {
-                    ProxySink proxySink = proxySinks.get(i);
-                    SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
-                    String type = proxySink.getType();
-                    String tagFlag = getTagFlagString(proxySink.getClientId(), type);
-
-                    if (proxySink.getClientId().equals(targetId)) {
-                        // 레이아웃에서 제거
-                        peersBinding.layout.removeView(surfaceViewRenderer);
-                        Log.d(TAG, tagFlag + "surfaceView 레이아웃에서 제거");
-
-                        // 변수에서 제거
-                        proxySinks.remove(i);
-                        Log.d(TAG, tagFlag + "surfaceView proxyVideoSinks에서 제거");
-                    }
-                }
-            }
-        });
-    }
-
     private void removeSurfaceView(String targetId, String type) {
+        Log.d(TAG_WEBRTC, getTagFlagString(targetId, type) + "의 removeView 삭재");
+
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 for (int i = 0; i < proxySinks.size(); i++) {
                     ProxySink proxySink = proxySinks.get(i);
                     SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
+                    // 모든 화면 다시 좌우 원상복귀
+                    surfaceViewRenderer.setMirror(true);
+
                     String tagFlag = getTagFlagString(proxySink.getClientId(), type);
+                    FrameLayout frameLayout = proxySink.getFrameLayout();
 
                     if (proxySink.getClientId().equals(targetId) && proxySink.getType().equals(type)) {
                         // 레이아웃에서 제거
-                        peersBinding.layout.removeView(surfaceViewRenderer);
+                        peersBinding.layout.removeView(frameLayout);
                         Log.d(TAG, tagFlag + "surfaceView 레이아웃에서 제거");
 
                         // 변수에서 제거
@@ -2760,64 +3092,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                 String tagFlag = getTagFlagString(clientId, type);
 
-                /**
-                 * 원격 SurfaceView 생성
-                 */
-                SurfaceViewRenderer surfaceViewRenderer = new SurfaceViewRenderer(MeetingRoomActivity.this);
-                surfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
-                surfaceViewRenderer.setEnableHardwareScaler(true);
-                surfaceViewRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT);
-                surfaceViewRenderer.setMirror(true);
+                // 바로 프레임레이아웃은 proxy에 세팅
+                ProxySink proxySink = createProxySink(clientId, type);
 
-                /**
-                 * [레이아웃 파라미터 생성]
-                 * SurfaceView의 길이, 높이 설정
-                 */
-                final int height = (int) peersBinding.layout.getHeight();
-                final int width = (int) height;
+                proxyComponentSetting(proxySink);
 
-                LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
-                surfaceViewRenderer.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
-
-                surfaceViewRenderer.getHolder().addCallback(new SurfaceHolder.Callback() {
-                    @Override
-                    public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
-                        Log.d(TAG, tagFlag + "surfaceCreated");
-                    }
-
-                    @Override
-                    public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-                    }
-
-                    @Override
-                    public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-                        Log.d(TAG, tagFlag + "surfaceDestroyed");
-                    }
-                });
-
-                // 클릭 이벤트 추가
-                surfaceViewRenderer.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-//                        Toast.makeText(MeetingRoomActivity.this, clickedClientId + "화면 클릭!!",Toast.LENGTH_SHORT).show();
-                        setSwappedFeeds(surfaceViewRenderer, null);
-                    }
-                });
-
-                ProxySink proxySink = new ProxySink(clientId, type);
-                proxySink.setTarget(surfaceViewRenderer);
-                Log.d(TAG, tagFlag + "proxySink(" + proxySink + ")와 surfaceViewRenderer(" + surfaceViewRenderer + ")연동");
-
-                // 레이아웃에 추가
-                ViewGroup layout = peersBinding.layout;
-                layout.addView(surfaceViewRenderer);
-
-                proxySinks.add(proxySink);
-                Log.d(TAG, "proxyVideoSinks:" + proxySinks);
+                Log.d(WEBRTC_PEER, "현재 proxySinks : " + proxySinks);
 
                 /**
                  * 화면 SurfaceViewRenderer가 main이 아니라면 교체 한다.
                  */
+                SurfaceViewRenderer surfaceViewRenderer = (SurfaceViewRenderer) proxySink.getTarget();
                 if (Common.SCREEN.equals(type)) {
                     if (surfaceViewRenderer != peersBinding.mainSurfaceView) {
                         Log.d(TAG, tagFlag + "메인 위치의 SurfaceView 와 스왑 합니다.");
@@ -2867,19 +3152,119 @@ public class MeetingRoomActivity extends AppCompatActivity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                Log.d(TAG_WEBRTC, "== 스왑 시작 ==");
                 ProxySink clickedProxySink = getVideoSinkFromSurfaceView(surfaceViewRenderer);
+                FrameLayout clickedProxyFrameLayout = (FrameLayout) surfaceViewRenderer.getParent();
                 SurfaceViewRenderer clickedTarget = (SurfaceViewRenderer) clickedProxySink.getTarget();
 
                 // 현재 메인 SurfaceView에 어떤 clientId가 매핑 되어져 있는지 가져오기
                 ProxySink mainProxySink = getMainProxyVideoSink();
+                Log.d(TAG_WEBRTC, "mainProxySink : " + mainProxySink);
+
+                /**
+                 * SurfaceViewRenderer Null 체크
+                 */
+                if (mainProxySink == null) return;
+
                 SurfaceViewRenderer mainTarget = (SurfaceViewRenderer) mainProxySink.getTarget();
                 if (mainTarget == null) return;
 
                 // 교환
-                mainProxySink.setTarget(clickedTarget);
-                clickedProxySink.setTarget(mainTarget);
+//                mainProxySink.setTarget(clickedTarget);
+//                clickedProxySink.setTarget(mainTarget);
+
+                /**
+                 * 공유 Screen이 있다면 좌우 반전 시켜서 Switch
+                 */
+                if(Common.SCREEN.equals(clickedProxySink.getType())){
+                    clickedTarget.setMirror(true);
+                    mainTarget.setMirror(false);
+                }else{
+                    clickedTarget.setMirror(true);
+                    mainTarget.setMirror(true);
+                }
+
+                /**
+                 * FrameLayout Switch
+                 * ProxySink로 오는 VideoTrack 데이터가 자동으로 FrameLayout아래에 있는 SurfaceViewRender로 데이터 보내줌
+                 * ProxySink <=> VideoTrack 연동 되어져 있음.
+                 */
+                FrameLayout mainFrameLayout = mainProxySink.getFrameLayout();
+                FrameLayout clickedFrameLayout = clickedProxySink.getFrameLayout();
+
+                mainProxySink.setFrameLayout(clickedFrameLayout);
+                clickedProxySink.setFrameLayout(mainFrameLayout);
+
+                /**
+                 * 오디오 상태 Switch
+                 */
+                ImageView mainAudioImageView = (ImageView) mainFrameLayout.getChildAt(1);
+                ImageView clickedAudioImageView = (ImageView) clickedFrameLayout.getChildAt(1);
+
+
+                Drawable mainAudioDrawable = mainAudioImageView.getDrawable();
+                Drawable clickedAudioDrawable = clickedAudioImageView.getDrawable();
+
+                mainAudioImageView.setImageDrawable(clickedAudioDrawable);
+                clickedAudioImageView.setImageDrawable(mainAudioDrawable);
+
+                boolean isMainAudioOn = mainAudioImageView.getVisibility() == View.GONE;
+                boolean isClickedAudioOn = clickedAudioImageView.getVisibility() == View.GONE;
+
+                if(isMainAudioOn){
+                    clickedAudioImageView.setVisibility(View.GONE);
+                }else{
+                    clickedAudioImageView.setVisibility(View.VISIBLE);
+                }
+
+                if(isClickedAudioOn){
+                    mainAudioImageView.setVisibility(View.GONE);
+                }else{
+                    mainAudioImageView.setVisibility(View.VISIBLE);
+                }
+
+                /**
+                 * 사용자명 Switch
+                 */
+                TextView mainTextView = (TextView) mainFrameLayout.getChildAt(2);
+                TextView clickedTextView = (TextView) clickedFrameLayout.getChildAt(2);
+
+                String mainUserName = mainTextView.getText().toString();
+                String clickedUserName = clickedTextView.getText().toString();
+                String tempUserName = mainUserName;
+
+                mainTextView.setText(clickedUserName);
+                clickedTextView.setText(tempUserName);
+
+                /**
+                 * 프로필 Switch
+                 */
+                ImageView mainProfileImageView = (ImageView) mainFrameLayout.getChildAt(3);
+                ImageView clickedProfileImageView = (ImageView) clickedFrameLayout.getChildAt(3);
+
+                Drawable mainProfileDrawable = mainProfileImageView.getDrawable();
+                Drawable clickedProfileDrawable = clickedProfileImageView.getDrawable();
+
+                mainProfileImageView.setImageDrawable(clickedProfileDrawable);
+                clickedProfileImageView.setImageDrawable(mainProfileDrawable);
+
+                boolean isMainVideoOn = mainProfileImageView.getVisibility() == View.GONE;
+                boolean isClickedVideoOn = clickedProfileImageView.getVisibility() == View.GONE;
+
+                if(isMainVideoOn){
+                    clickedProfileImageView.setVisibility(View.GONE);
+                }else{
+                    clickedProfileImageView.setVisibility(View.VISIBLE);
+                }
+
+                if(isClickedVideoOn){
+                    mainProfileImageView.setVisibility(View.GONE);
+                }else{
+                    mainProfileImageView.setVisibility(View.VISIBLE);
+                }
 
                 if (swapResult != null) swapResult.onSuccess(clickedTarget);
+                Log.d(TAG_WEBRTC, "== 스왑 완료 ==");
             }
         });
     }
@@ -2992,7 +3377,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         socket.emit("message", message);
     }
 
-    private CustomSurfaceViewRenderer remoteCustomSurfaceViewRenderer;
+    private CustomSurfaceViewRenderer windowCustomSurfaceViewRenderer;
 
     private void initializeMainSurfaceViews() {
         rootEglBase = EglBase.create();
@@ -3004,13 +3389,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
                 Log.d(TAG, "[Main SurfaceView] surfaceCreated");
+
+                Log.d(WEBRTC_PEER, "메인 SurfaceView(" + peersBinding.mainSurfaceView + ")가 생성 됐습니다.");
+
                 final int width = (int) peersBinding.mainSurfaceView.getWidth();
                 final int height = (int) width;
 
-                ConstraintLayout.LayoutParams layoutParams = new ConstraintLayout.LayoutParams(width, height);
-                layoutParams.bottomToTop = R.id.layout;
-                layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
-                peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
+//                ConstraintLayout.LayoutParams layoutParams = new ConstraintLayout.LayoutParams(width, height);
+//                layoutParams.bottomToTop = R.id.layout;
+//                layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID;
+//                peersBinding.mainSurfaceView.setLayoutParams(layoutParams); // 레이아웃 파라미터 적용
 
 //                createSurfaceViewRendererResult.onSuccess();
             }
@@ -3026,11 +3414,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
-        /** 외부 SurfaceView 생성 */
-        remoteCustomSurfaceViewRenderer = new CustomSurfaceViewRenderer(MeetingRoomActivity.this);
-        remoteCustomSurfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
-        remoteCustomSurfaceViewRenderer.setEnableHardwareScaler(true);
-        remoteCustomSurfaceViewRenderer.setMirror(true);
+        /** 윈도우 SurfaceView 생성 */
+        windowCustomSurfaceViewRenderer = new CustomSurfaceViewRenderer(MeetingRoomActivity.this);
+        windowCustomSurfaceViewRenderer.init(rootEglBase.getEglBaseContext(), null);
+        windowCustomSurfaceViewRenderer.setEnableHardwareScaler(true);
+        windowCustomSurfaceViewRenderer.setMirror(true);
+
+        Log.d(WEBRTC_PEER, "윈도우 SurfaceViewRenderder(" + windowCustomSurfaceViewRenderer + ") 가 생성  됐습니다.");
     }
 
     private void initializePeerConnectionFactory() {
@@ -3053,8 +3443,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         final VideoEncoderFactory encoderFactory;
         final VideoDecoderFactory decoderFactory;
 
-        encoderFactory = new DefaultVideoEncoderFactory(
-                rootEglBase.getEglBaseContext(), true /* enableIntelVp8Encoder */, true);
+        encoderFactory = new DefaultVideoEncoderFactory(rootEglBase.getEglBaseContext(), true /* enableIntelVp8Encoder */, true);
         decoderFactory = new DefaultVideoDecoderFactory(rootEglBase.getEglBaseContext());
 
         factory = PeerConnectionFactory.builder()
@@ -3123,7 +3512,9 @@ public class MeetingRoomActivity extends AppCompatActivity {
         try {
             String tagFlag = getTagFlagString(clientId, type);
 
-            customPeerConnection = new CustomPeerConnection(factory, clientId, type, new CustomPeerConnection.Observer() {
+            UserModel userModel = getUserModel(clientId);
+
+            customPeerConnection = new CustomPeerConnection(factory, clientId, type, userModel, new CustomPeerConnection.Observer() {
                 @Override
                 public void onSignalingChange(PeerConnection.SignalingState signalingState) {
                     Log.d(TAG, tagFlag + "onSignalingChange: " + signalingState);
@@ -3201,6 +3592,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     Log.d(TAG, tagFlag + "onDataChannel: ");
                     Log.d(TAG, "New Data channel " + dc.label());
 
+                    Log.d(WEBRTC_PEER, "데이터 채널(" + clientId + "," + type + "," + userModel.getName() + ")이 연결 완료 됐습니다.");
+
                     /** 데이터 받을 때 사용하는 데이터 채널 */
                     dc.registerObserver(new DataChannel.Observer() {
                         @Override
@@ -3213,6 +3606,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
                             Log.d(TAG, "Data channel state changed: " + dc.label() + ": " + dc.state());
 
                             if (dc.state() == DataChannel.State.OPEN) {
+                                /** 데이터 채널 연결 완료 되면 상대방 피어들에게 자신의 오디오 상태를 브로드 캐스트한다. */
+                                Log.d(TAG_WEBRTC, "데이터 채널 연결 완료");
+                                broadcastAudioState();
+                                broadcastVideoState();
+
                                 // 화이트 보드 공유중이라면, 해당 프레그먼트를 활성화 시키고, 이미지 요청을 한다.
                                 if (!"".equals(whiteboardId) && whiteboardId != null) {
                                     replaceFragment(whiteboardFragment);
@@ -3280,9 +3678,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                                 Log.d(TAG, "x:" + x + ", y:" + y + ", colorType:" + colorType + ", motion:" + motion);
 
+                                Log.d(WEBRTC_WHITEBOARD, "좌표(x:" + x + ", y:" + y + ", colorType:" + colorType + ", motion:" + motion + ")를 받았습니다.");
+
                                 MeetingRoomActivity.this.drawingView.fireDraw(x, y, colorType, clientId, motion);
                             } else if ("img_req".equals(cmd)) {
                                 Log.d(TAG, "img_req 요청을 받았다.");
+                                Log.d(WEBRTC_WHITEBOARD, "현재 화이트보드에 대한 이미지 요청을 받았습니다");
                                 if (drawingView != null) {
                                     Bitmap bitmap = getViewBitmap(drawingView);
 //                                    Log.d(TAG, "bitmap:" + bitmap);
@@ -3345,6 +3746,41 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                         }
                                     });
                                 }
+                            }else if("audio_state_send".equals(cmd)){
+//                                Log.d(TAG_WEBRTC, "상대방으로부터 오디오 상태 값 받음");
+                                boolean isAudioOn = Boolean.valueOf(splitData[1]);
+                                ProxySink proxySink = getProxySink(clientId, Common.VIDEO);
+                                FrameLayout frameLayout = proxySink.getFrameLayout();
+                                // 오디오 imageView 는 항상 index 1 위치에 존재한다.
+                                ImageView audioMuteImageView = (ImageView) frameLayout.getChildAt(1);
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(isAudioOn){
+                                            audioMuteImageView.setVisibility(View.GONE);
+                                        }else{
+                                            audioMuteImageView.setVisibility(View.VISIBLE);
+                                        }
+                                    }
+                                });
+
+                            }else if("video_state_send".equals(cmd)){
+                                boolean isVideoOn = Boolean.valueOf(splitData[1]);
+                                ProxySink proxySink = getProxySink(clientId, Common.VIDEO);
+                                FrameLayout frameLayout = proxySink.getFrameLayout();
+                                // 프로필 imageView 는 항상 index 3 위치에 존재한다.
+                                ImageView profileImageView = (ImageView) frameLayout.getChildAt(3);
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(isVideoOn){
+                                            profileImageView.setVisibility(View.GONE);
+                                        }else{
+                                            profileImageView.setVisibility(View.VISIBLE);
+                                        }
+                                    }
+                                });
+
                             }
                         }
                     });
@@ -3590,8 +4026,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
             windowManagerSetting();
         }else{
             WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-            if(remoteCustomSurfaceViewRenderer != null && remoteCustomSurfaceViewRenderer.getWindowToken() != null){
-                windowManager.removeView(remoteCustomSurfaceViewRenderer);
+            ProxySink windowProxy = getProxySink("windowLocal", Common.VIDEO);
+            FrameLayout windowFrameLayout = windowProxy.getFrameLayout();
+
+            if(windowFrameLayout != null && windowFrameLayout.getWindowToken() != null){
+                windowManager.removeView(windowFrameLayout);
             }
         }
 
@@ -3633,16 +4072,20 @@ public class MeetingRoomActivity extends AppCompatActivity {
         ProxySink mainProxySink = getMainProxyVideoSink();
         VideoTrack mainVideoTrack = mainProxySink.getVideoTrack();
 
+        ProxySink windowProxySink = getProxySink("windowLocal", Common.VIDEO);
+        FrameLayout frameLayout = windowProxySink.getFrameLayout();
+
         /** 전에 연동된 비디오 싱크 제거 */
-        VideoTrack beforeVideoTrack = remoteProxySink.getVideoTrack();
-        beforeVideoTrack.removeSink(remoteProxySink);
+        VideoTrack beforeVideoTrack = windowProxySink.getVideoTrack();
+        beforeVideoTrack.removeSink(windowProxySink);
 
         /** 메인 비디오 트랙과 연동 */
-        remoteProxySink.setVideoTrack(mainVideoTrack);
-        mainVideoTrack.addSink(remoteProxySink);
+        windowProxySink.setVideoTrack(mainVideoTrack);
+        mainVideoTrack.addSink(windowProxySink);
 
         WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        windowManager.addView(remoteCustomSurfaceViewRenderer, params);
+//        windowManager.removeView(windowCustomSurfaceViewRenderer);
+        windowManager.addView(frameLayout, params);
     }
 
     public DrawingView getDrawingView() {

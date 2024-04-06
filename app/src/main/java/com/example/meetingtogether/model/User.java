@@ -19,6 +19,7 @@ public class User extends CommonModel{
 
     public User(String id, String password, String nickName, String phoneNum) {
         super();
+        this.id = id;
         this.password = password;
         this.nickName = nickName;
         this.phoneNum = phoneNum;

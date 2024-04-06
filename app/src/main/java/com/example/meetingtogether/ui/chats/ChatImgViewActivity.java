@@ -23,6 +23,7 @@ import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.model.SliderItem;
 import com.example.meetingtogether.retrofit.FileInfo;
 import com.example.meetingtogether.retrofit.LocalDateTimeDeserializer;
+import com.example.meetingtogether.retrofit.ZonedDateTimeDeserializer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.smarteist.autoimageslider.IndicatorView.animation.type.IndicatorAnimationType;
@@ -31,6 +32,7 @@ import com.smarteist.autoimageslider.SliderView;
 import com.smarteist.autoimageslider.SliderViewAdapter;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -52,6 +54,7 @@ public class ChatImgViewActivity extends AppCompatActivity {
 
         GsonBuilder gsonBuilder = new GsonBuilder();
         gsonBuilder.registerTypeAdapter(LocalDateTime.class, new LocalDateTimeDeserializer());
+        gsonBuilder.registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeDeserializer());
         gson = gsonBuilder.create();
 
         Intent intent = getIntent();

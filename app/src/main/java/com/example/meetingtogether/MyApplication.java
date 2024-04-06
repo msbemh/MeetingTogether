@@ -1,6 +1,7 @@
 package com.example.meetingtogether;
 
 import android.app.Application;
+import android.content.Context;
 import android.graphics.Color;
 
 import androidx.core.content.ContextCompat;
@@ -17,10 +18,13 @@ public class MyApplication extends Application {
 
     private Socket mSocket;
     public static EnumMap<ColorType, Integer> colorTypeIntegerEnumMap;
+    private static Context context;
 
     @Override
     public void onCreate() {
         super.onCreate();
+
+        MyApplication.context = getApplicationContext();
 
         colorTypeIntegerEnumMap = new EnumMap<>(ColorType.class);
         colorTypeIntegerEnumMap.put(ColorType.BLACK, Color.BLACK);
@@ -60,6 +64,10 @@ public class MyApplication extends Application {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static Context ApplicationContext(){
+        return MyApplication.context;
     }
 
 }

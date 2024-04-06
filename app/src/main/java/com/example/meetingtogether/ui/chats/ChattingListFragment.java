@@ -167,28 +167,15 @@ public class ChattingListFragment extends Fragment {
                                 @Override
                                 public void run() {
                                     String friendProfileImgPath = dataList.get(position).getFriendProfileImgPath();
-                                    RequestOptions requestOptions = new RequestOptions().circleCrop();
-                                    Glide
-                                        .with(getActivity())
-                                        .load(friendProfileImgPath == null ? R.mipmap.ic_launcher : "https://webrtc-sfu.kro.kr/" + friendProfileImgPath)
-                                        .apply(requestOptions)
-                                        /** Glide는 원본 비율을 유지한다. */
-                                        .override(500,500)
-                                        .into(itemBinding.imageViewProfile);
+                                    Util.loadProfile(getActivity(), itemBinding.imageViewProfile, friendProfileImgPath, CustomDialog.Type.PROFILE_IMAGE);
                                 }
                             });
                         }else if(userCnt >= 3){
                             getActivity().runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    RequestOptions requestOptions = new RequestOptions().centerCrop();
-                                    Glide
-                                        .with(getActivity())
-                                        .load(combinedBitmap)
-                                        .apply(requestOptions)
-                                        /** Glide는 원본 비율을 유지한다. */
-                                        .override(100,100)
-                                        .into(itemBinding.imageViewProfile);
+                                    RequestOptions requestOptions = new RequestOptions();
+                                    Util.loadProfile(getActivity(), itemBinding.imageViewProfile, combinedBitmap, CustomDialog.Type.PROFILE_IMAGE, 100, requestOptions);
                                 }
                             });
                         }
@@ -350,9 +337,14 @@ public class ChattingListFragment extends Fragment {
             for(int i=0; i<profileArray.length; i++){
                 String profileImgPath = profileArray[i];
 
+                boolean isGoogleLogin = profileImgPath.startsWith("https://");
+                if(!isGoogleLogin){
+                    profileImgPath = "https://webrtc-sfu.kro.kr/" + profileImgPath;
+                }
+
                 Bitmap bitmap = Glide.with(getActivity())
                         .asBitmap()
-                        .load("https://webrtc-sfu.kro.kr/" + profileImgPath)
+                        .load(profileImgPath)
                         .apply(requestOptions)
                         .submit()
                         .get();
@@ -387,8 +379,8 @@ public class ChattingListFragment extends Fragment {
     }
 
     private Bitmap combineBitmap(List<Bitmap> bitmapList){
-        int combinedWidth = bitmapList.get(0).getWidth();
-        int combinedHeight = bitmapList.get(0).getHeight();
+        int combinedWidth = 100;
+        int combinedHeight = 100;
         Bitmap combinedBitmap = Bitmap.createBitmap(combinedWidth, combinedHeight, bitmapList.get(0).getConfig());
         Canvas canvas = new Canvas(combinedBitmap);
 
@@ -397,9 +389,11 @@ public class ChattingListFragment extends Fragment {
             canvas.drawBitmap(bitmap, 0, 0, null);
         }else if(bitmapList.size() == 2){
             Bitmap bitmapLeft = bitmapList.get(0);
+            bitmapLeft = Bitmap.createScaledBitmap(bitmapLeft, 100, 100, true);
             bitmapLeft = Bitmap.createScaledBitmap(bitmapLeft, bitmapLeft.getWidth() / 2, bitmapLeft.getHeight() / 2, true);
 
             Bitmap bitmapRight = bitmapList.get(1);
+            bitmapRight = Bitmap.createScaledBitmap(bitmapRight, 100, 100, true);
             bitmapRight = Bitmap.createScaledBitmap(bitmapRight, bitmapRight.getWidth() / 2, bitmapRight.getHeight() / 2, true);
 
             canvas.drawBitmap(bitmapLeft, 0, 0, null);
@@ -407,12 +401,15 @@ public class ChattingListFragment extends Fragment {
 
         }else if(bitmapList.size() == 3){
             Bitmap bitmapLeft = bitmapList.get(0);
+            bitmapLeft = Bitmap.createScaledBitmap(bitmapLeft, 100, 100, true);
             bitmapLeft = Bitmap.createScaledBitmap(bitmapLeft, bitmapLeft.getWidth() / 2, bitmapLeft.getHeight()/2, true);
 
             Bitmap bitmapRight = bitmapList.get(1);
+            bitmapRight = Bitmap.createScaledBitmap(bitmapRight, 100, 100, true);
             bitmapRight = Bitmap.createScaledBitmap(bitmapRight, bitmapRight.getWidth() / 2, bitmapRight.getHeight()/2, true);
 
             Bitmap bitmapBottom = bitmapList.get(2);
+            bitmapBottom = Bitmap.createScaledBitmap(bitmapBottom, 100, 100, true);
             bitmapBottom = Bitmap.createScaledBitmap(bitmapBottom, bitmapBottom.getWidth() / 2, bitmapBottom.getHeight()/2, true);
 
             canvas.drawBitmap(bitmapLeft, 0, 0, null);
@@ -421,15 +418,19 @@ public class ChattingListFragment extends Fragment {
 
         }else if(bitmapList.size() >= 4){
             Bitmap bitmapTopLeft = bitmapList.get(0);
+            bitmapTopLeft = Bitmap.createScaledBitmap(bitmapTopLeft, 100, 100, true);
             bitmapTopLeft = Bitmap.createScaledBitmap(bitmapTopLeft, bitmapTopLeft.getWidth() / 2, bitmapTopLeft.getHeight()/2, true);
 
             Bitmap bitmapTopRight = bitmapList.get(1);
+            bitmapTopRight = Bitmap.createScaledBitmap(bitmapTopRight, 100, 100, true);
             bitmapTopRight = Bitmap.createScaledBitmap(bitmapTopRight, bitmapTopRight.getWidth() / 2, bitmapTopRight.getHeight()/2, true);
 
             Bitmap bitmapBottomLeft = bitmapList.get(2);
+            bitmapBottomLeft = Bitmap.createScaledBitmap(bitmapBottomLeft, 100, 100, true);
             bitmapBottomLeft = Bitmap.createScaledBitmap(bitmapBottomLeft, bitmapBottomLeft.getWidth() / 2, bitmapBottomLeft.getHeight()/2, true);
 
             Bitmap bitmapBottomRight = bitmapList.get(3);
+            bitmapBottomRight = Bitmap.createScaledBitmap(bitmapBottomRight, 100, 100, true);
             bitmapBottomRight = Bitmap.createScaledBitmap(bitmapBottomRight, bitmapBottomRight.getWidth() / 2, bitmapBottomRight.getHeight()/2, true);
 
             canvas.drawBitmap(bitmapTopLeft, 0, 0, null);

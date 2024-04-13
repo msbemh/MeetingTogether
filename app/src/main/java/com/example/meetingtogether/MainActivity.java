@@ -1,5 +1,7 @@
 package com.example.meetingtogether;
 
+import static com.example.meetingtogether.common.Util.SOCKET_TAG;
+
 import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -18,16 +20,13 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.example.meetingtogether.broadcast.BootReceiver;
+import com.example.meetingtogether.broadcast.InternetReceiver;
 import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.databinding.ActivityMainBinding;
 import com.example.meetingtogether.model.MessageDTO;
 import com.example.meetingtogether.services.ChatService;
-import com.example.meetingtogether.services.TestService;
-import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 import com.example.meetingtogether.ui.chats.ChattingListFragment;
-import com.example.meetingtogether.ui.meetings.MeetingRoomActivity;
 import com.example.meetingtogether.ui.user.LoginActivity;
-import com.example.meetingtogether.ui.user.SignUpActivity;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import androidx.activity.result.ActivityResultCallback;
@@ -36,11 +35,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
 import androidx.navigation.NavController;
-import androidx.navigation.NavDestination;
 import androidx.navigation.Navigation;
-import androidx.navigation.fragment.FragmentNavigator;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
@@ -56,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
     public static String TAG = "TEST_SONG";
     public static String TAG_LIFE = "LIFE_TEST_SONG";
     public static String TAG_WEBRTC = "TEST_WEBRTC";
+    public static String TAG_INTERNET_RECEIVER = "TAG_INTERNET_RECEIVER";
     private NavController navController;
     public boolean isActiveMainActivity = false;
 
@@ -175,12 +172,19 @@ public class MainActivity extends AppCompatActivity {
         /**
          * 브로드 캐스트 등록
          */
+
+        // 1. 부팅 브로드 캐스트
         BroadcastReceiver br = new BootReceiver();
         IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
         filter.addAction(Intent.ACTION_SHUTDOWN);
         filter.addAction(Intent.ACTION_REBOOT);
         this.registerReceiver(br, filter);
 
+        // 2. 인터넷 브로드 캐스트
+        InternetReceiver internetReceiver = new InternetReceiver();
+        IntentFilter internetBrFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        internetBrFilter.addAction("android.net.conn.CONNECTIVITY_CHANGE");
+        this.registerReceiver(internetReceiver, internetBrFilter);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
@@ -212,6 +216,11 @@ public class MainActivity extends AppCompatActivity {
         /** 메인 액비티비와 서비스를 바인딩 */
         if(!isBound){
             bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        }
+
+        /** 인터넷 연결 안되어져 있으면 표시해주기 */
+        if(!Util.getNetwork(getApplicationContext())){
+            Util.showMessage(MainActivity.this, "채팅 서비스에 연결이 되지 않았습니다.");
         }
     }
 
@@ -248,6 +257,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onAlertMsg(String msg) {
+                Log.d(SOCKET_TAG, msg);
                 if(isActiveMainActivity){
                     runOnUiThread(new Runnable() {
                         @Override
@@ -295,4 +305,5 @@ public class MainActivity extends AppCompatActivity {
 //        mChatService.setRoomListInterface(null);
 //        if(connection != null) unbindService(connection);
     }
+
 }

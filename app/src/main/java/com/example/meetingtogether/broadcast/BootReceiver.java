@@ -1,7 +1,5 @@
 package com.example.meetingtogether.broadcast;
 
-import static androidx.core.content.ContextCompat.startForegroundService;
-
 import static com.example.meetingtogether.MainActivity.TAG;
 import static com.example.meetingtogether.sharedPreference.SharedPreferenceRepository.pref;
 
@@ -13,13 +11,11 @@ import android.os.Build;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.common.Util;
 import com.example.meetingtogether.retrofit.CommonRetrofitResponse;
 import com.example.meetingtogether.retrofit.RetrofitService;
 import com.example.meetingtogether.services.ChatService;
 import com.example.meetingtogether.sharedPreference.SharedPreferenceRepository;
-import com.example.meetingtogether.ui.chats.ChatRoomActivity;
 
 import java.io.IOException;
 
@@ -35,8 +31,6 @@ public class BootReceiver extends BroadcastReceiver {
         Toast.makeText(context, "onReceive 동작", Toast.LENGTH_SHORT);
 
         if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
-
-
             SharedPreferenceRepository.init();
             SharedPreferenceRepository.pref =  context.getSharedPreferences("pref", Activity.MODE_PRIVATE);
             SharedPreferenceRepository.editor = pref.edit();

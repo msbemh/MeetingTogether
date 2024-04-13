@@ -11,6 +11,7 @@ import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -30,12 +31,14 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
+import com.example.meetingtogether.MainActivity;
 import com.example.meetingtogether.MyApplication;
 import com.example.meetingtogether.R;
 import com.example.meetingtogether.dialogs.CustomDialog;
@@ -71,6 +74,8 @@ public class Util {
     public static String PERIODIC_TAG = "PERIODIC_TAG";
     public static String WEBRTC_PEER = "WEBRTC_PEER";
     public static String WEBRTC_WHITEBOARD = "WEBRTC_WHITEBOARD";
+    public static String SOCKET_TAG = "SOCKET_TAG";
+
     public static String DRAW_TAG = "DRAW_TAG";
     public static int ACTION_CREATE = 0;
     public static int ACTION_EDIT = 1;
@@ -595,6 +600,20 @@ public class Util {
             phoneNum = phoneNum.replace("+82", "0");
         }
         return phoneNum;
+    }
+
+    public static void showMessage(Context context, String msg){
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle("알림")
+                .setMessage(msg)
+                .setPositiveButton("확인", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+
+                    }
+                })
+                .create()
+                .show();
     }
 
 }

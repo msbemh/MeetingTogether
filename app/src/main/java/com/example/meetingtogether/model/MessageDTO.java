@@ -95,7 +95,8 @@ public class MessageDTO {
         IMAGE,
         MEETING_RESERVE_NOTIFICATION,
         NOTIFY_MEETING_RESERVE_CREATED,
-        NOTIFY_MEETING_RESERVE_DELETED
+        NOTIFY_MEETING_RESERVE_DELETED,
+        PING_PONG
     }
 
     public enum MessageType{

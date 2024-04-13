@@ -87,7 +87,6 @@ public class ChatService extends Service {
     private Notification notification;
     private ChatService.ChatServiceInterface roomListEvent;
     private ChatService.ChatServiceInterface roomEvent;
-
     private Context context;
 
     private Handler handler;
@@ -179,20 +178,21 @@ public class ChatService extends Service {
         });
 
         // 주기적으로 소켓 열려있는지 확인하는 인터벌 타이머
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                // 소켓 연결
-                openSocket();
-            }
-        }, 0, 5000);
+//        Timer timer = new Timer();
+//        timer.scheduleAtFixedRate(new TimerTask() {
+//            @Override
+//            public void run() {
+//                // 소켓 연결
+//                openSocket();
+//            }
+//        }, 0, 5000);
     }
 
-    private void openSocket(){
+    public void openSocket(){
         try {
             if(!Util.getNetwork(getApplicationContext())){
                 Log.d(TAG, "네트워크 연결이 되지 않아 소켓 연결을 할 수 없습니다.");
+                showMessage("네트워크 연결이 되지 않아 소켓 연결을 할 수 없습니다.");
                 return;
             }
 
@@ -204,6 +204,7 @@ public class ChatService extends Service {
                         // 서버로 부터 메시지 받는 곳
                         try {
                             socket = new Socket(SERVER_HOST, SERVER_PORT);
+                            socket.setSoTimeout(10000);
 
                             OutputStream outputStream = socket.getOutputStream();
                             outputStream.flush();
@@ -283,6 +284,13 @@ public class ChatService extends Service {
                                      */
                                     showReserveNotification(receiveMsgDTO);
 
+                                /**
+                                 * 연결 중이라는 사실을 알리기 위한 핑퐁
+                                 */
+                                }else if(type == MessageDTO.RequestType.PING_PONG){
+                                    MessageDTO pingPong = new MessageDTO();
+                                    pingPong.setType(MessageDTO.RequestType.PING_PONG);
+                                    sendMsg(pingPong);
                                 }
                             }
                         } catch (IOException e) {
@@ -635,4 +643,5 @@ public class ChatService extends Service {
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
         notificationManager.notify(messageDTO.getId(), builder.build());
     }
+
 }

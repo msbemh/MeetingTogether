@@ -16,6 +16,8 @@ public class UserModel {
     private String email;
     private String host;
     private boolean isHost = false;
+    private boolean isTest = false;
+    private String masterId;
     private List<ProfileMap> profileImgPaths;
 
     public UserModel(){
@@ -25,11 +27,11 @@ public class UserModel {
         this.clientId = clientId;
     }
 
-    @NonNull
-    @Override
-    public String toString() {
-        return "UserModel{" + "clientID=" + this.clientId + ", '}'";
-    }
+//    @NonNull
+//    @Override
+//    public String toString() {
+//        return "UserModel{" + "clientID=" + this.clientId + ", '}'";
+//    }
 
     public String getClientId() {
         return clientId;
@@ -87,11 +89,27 @@ public class UserModel {
         return isHost;
     }
 
+    public boolean isTest() {
+        return isTest;
+    }
+
+    public void setTest(boolean test) {
+        isTest = test;
+    }
+
     public List<ProfileMap> getProfileImgPaths() {
         return profileImgPaths;
     }
 
     public void setProfileImgPaths(List<ProfileMap> profileImgPaths) {
         this.profileImgPaths = profileImgPaths;
+    }
+
+    public String getMasterId() {
+        return masterId;
+    }
+
+    public void setMasterId(String masterId) {
+        this.masterId = masterId;
     }
 }

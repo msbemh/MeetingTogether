@@ -22,6 +22,7 @@ public class User extends CommonModel{
         this.id = id;
         this.password = password;
         this.nickName = nickName;
+        this.name = nickName;
         this.phoneNum = phoneNum;
     }
 

@@ -153,6 +153,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import io.socket.client.IO;
@@ -239,6 +240,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     public static final int VIDEO_RESOLUTION_WIDTH = 1440;
     public static final int VIDEO_RESOLUTION_HEIGHT = 1080;
     public static final int FPS = 30;
+    public static final int testNum = 1;
 
     private static final String VIDEO_FLEXFEC_FIELDTRIAL =
             "WebRTC-FlexFEC-03-Advertised/Enabled/WebRTC-FlexFEC-03/Enabled/";
@@ -252,6 +254,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     private Socket socket;
     // 소켓 Id
     private String socketId;
+    private List<Socket> testSocketList = new ArrayList<>();
 
 
 
@@ -1420,6 +1423,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
             }
         });
 
+        /**
+         * 사용자 부하 테스트를 위한 버튼
+         */
+        binding.testButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                connectToSignallingServer(true);
+            }
+        });
+
     }
 
     private int noCnt = 0;
@@ -2174,7 +2187,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
             userNameTextView.setLayoutParams(userNameTextViewParams);
 
 
-            UserModel userModel = getUserModel(clientId);
+            UserModel userModel = getUserModel(clientId.replaceAll("@", ""));
             userName = userModel.getName();
 
             /**
@@ -2328,24 +2341,45 @@ public class MeetingRoomActivity extends AppCompatActivity {
     }
 
     private void connectToSignallingServer() {
+        connectToSignallingServer(false);
+    }
+    private void connectToSignallingServer(boolean isSocketTest) {
         try {
             // For me this was "http://192.168.1.220:3000";
             String URL = "https://webrtc-sfu.kro.kr:3030/";// "https://calm-badlands-59575.herokuapp.com/"; //
-            socket = IO.socket(URL);
+            Socket socket = IO.socket(URL);
+            if(isSocketTest){
+                MeetingRoomActivity.this.testSocketList.add(socket);
+            }else{
+                MeetingRoomActivity.this.socket = socket;
+            }
 
-            socket.on(EVENT_CONNECT, args -> {
-                Log.d(TAG, "[소켓연결]");
+            final Socket localSocket = socket;
+            localSocket.on(EVENT_CONNECT, args -> {
+                Log.d(WEBRTC_PEER, "[소켓연결]");
 //                Log.d(TAG, "[소켓에서 스레드 네임]" + Thread.currentThread().getName());
 
                 MeetingDTO meetingDTO = new MeetingDTO();
                 meetingDTO.setId(Integer.valueOf(roomId));
-                meetingDTO.setUser(Util.user);
-                // host 정보가 있을 때만 서버로 host정보 보내준다.
-                if(host != null && !"".equals(host)) meetingDTO.setHost(host);
+                meetingDTO.setTest(isSocketTest);
+                meetingDTO.setMasterId(MeetingRoomActivity.this.socket.id());
+
+                if(isSocketTest){
+                    String userId = "test" + testNum + "@naver.com";
+                    String userName = "test" + testNum;
+                    String phoneNum = "01000000000";
+
+                    User user = new User(userId, "pmWkWSBCL51Bfkhn79xPuKBKHz//H6B+mY6G9/eieuM=", userName, phoneNum);
+                    meetingDTO.setUser(user);
+                }else{
+                    meetingDTO.setUser(Util.user);
+                    // host 정보가 있을 때만 서버로 host정보 보내준다.
+                    if(host != null && !"".equals(host)) meetingDTO.setHost(host);
+                }
 
                 String jsonString = gson.toJson(meetingDTO);
 
-                socket.emit("join", jsonString);
+                localSocket.emit("join", jsonString);
             }).on("bye", args -> {
                 JSONObject message = (JSONObject) args[0];
                 String clientId = message.optString("id");
@@ -2455,15 +2489,21 @@ public class MeetingRoomActivity extends AppCompatActivity {
                      */
                     if (type.equals("userList")) {
                         try {
-                            if(socket == null) return;
+                            if(localSocket == null) return;
 
                             String initiator = message.optString("initiator");
 
-                            socketId = socket.id();
+                            socketId = localSocket.id();
 
-                            Log.d(TAG, "[proxyVideoSinks]:" + proxySinks);
-                            Log.d(TAG, "[initiator]:" + initiator);
-                            Log.d(TAG, "[모바일 소켓 ID]:" + socketId);
+                            //Log.d(WEBRTC_PEER, "[proxyVideoSinks]:" + proxySinks);
+                            Log.d(WEBRTC_PEER, "[initiator]:" + initiator);
+                            Log.d(WEBRTC_PEER, "[모바일 소켓 ID]:" + socketId);
+                            Log.d(WEBRTC_PEER, "[소켓 isTest]:" + isSocketTest);
+
+                            if(isSocketTest){
+                                Log.d(WEBRTC_PEER, "테스트 소켓은 유저리스트 로직을 생략합니다.");
+                                return;
+                            }
 
                             /**
                              * [유저리스트 업데이트]
@@ -2476,7 +2516,13 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                             for (int i = 0; i < jsonArray.length(); i++) {
                                 JSONObject userObj = (JSONObject) jsonArray.get(i);
-                                UserModel userModel = new UserModel(userObj.optString("clientId"));
+
+                                String clientId = userObj.optString("clientId");
+                                boolean isHost = userObj.getBoolean("isHost");
+                                boolean isTest = userObj.getBoolean("isTest");
+                                String masterId = userObj.getString("masterId");
+
+                                UserModel userModel = new UserModel(clientId);
 
                                 String profileImgPathsStr = userObj.optString("profileImgPaths");
                                 List<ProfileMap> profileImgPaths = gson.fromJson(profileImgPathsStr, new TypeToken<ArrayList<ProfileMap>>(){}.getType());
@@ -2486,19 +2532,18 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                     imgPath = profileImgPaths.get(0).getProfileImgPath();
                                 }
 
-                                boolean isHost = userObj.getBoolean("isHost");
-
                                 userModel.setImgPath(imgPath);
                                 userModel.setName(userObj.optString("name"));
                                 userModel.setEmail(userObj.optString("id"));
                                 userModel.setHost(isHost);
+                                userModel.setTest(isTest);
+                                userModel.setMasterId(masterId);
 
                                 if (!isExistUser(userModel.clientId)) {
                                     // 새로운 유저 추가
-                                    Log.d(TAG, "[USER]" + userModel.clientId + "추가");
                                     Log.d(WEBRTC_PEER, "사용자(" + userModel.clientId + "," + userModel.getName() + ")이 참가했습니다.");
-                                    Log.d(WEBRTC_PEER, "현재 userList : " + userList);
                                     userList.add(userModel);
+                                    Log.d(WEBRTC_PEER, "현재 userList : " + userList);
                                 }
 
                                 /**
@@ -2506,14 +2551,31 @@ public class MeetingRoomActivity extends AppCompatActivity {
                                  * 새롭게 들어온 유저(initiator)가 자기 자신인 유저가 피어를 생성하고 Offer를 전송한다.
                                  * 자기 자신에 대한 피어는 필요 없으니 제외
                                  */
-                                if (initiator.equals(socketId)) {
-                                    // 나 자신은 제외
-                                    if (userModel.clientId.equals(socketId)) continue;
+                                // 나 자신은 제외
+                                if (userModel.clientId.equals(socketId)) continue;
 
-                                    // 해당 피어 없을 때만 생성
-                                    CustomPeerConnection customPeerConnection = getCustomPeerConnection(userModel.clientId, Common.VIDEO);
-                                    if (customPeerConnection == null) {
-                                        createPeerAndDoOffer(userModel.clientId, Common.VIDEO);
+                                // 해당 사용자 자체가 테스트용일 경우
+                                if(isTest){
+                                    // 해당 사용자가 테스트이지만, 마스터아이디가 일치할 경우 패스
+                                    if(MeetingRoomActivity.this.socket.id().equals(masterId)){
+                                        continue;
+                                    // 해당 사용자가 테스트이고, 마스터아이다가 일치하지 않은 경우 피어 생성
+                                    }else{
+                                        // 해당 피어 없을 때만 생성
+                                        CustomPeerConnection customPeerConnection = getCustomPeerConnection(userModel.clientId, Common.VIDEO);
+                                        if (customPeerConnection == null) {
+                                            createPeerAndDoOffer(userModel.clientId, Common.VIDEO);
+                                        }
+                                    }
+                                // 일반 사용자일 경우
+                                }else{
+                                    if (initiator.equals(socketId)) {
+
+                                        // 해당 피어 없을 때만 생성
+                                        CustomPeerConnection customPeerConnection = getCustomPeerConnection(userModel.clientId, Common.VIDEO);
+                                        if (customPeerConnection == null) {
+                                            createPeerAndDoOffer(userModel.clientId, Common.VIDEO);
+                                        }
                                     }
                                 }
                             }
@@ -2553,12 +2615,16 @@ public class MeetingRoomActivity extends AppCompatActivity {
                      * [offer 받음]
                      */
                     } else if (type.equals("offer")) {
+                        if(isSocketTest){
+                            senderId = createTestClientId(senderId);
+                            Log.d(WEBRTC_PEER, "[테스트용] senderId를 " + senderId + "로 변경했습니다.");
+                        }
                         String tagFlag = getTagFlagString(senderId, peerType);
 
-                        Log.d(TAG, tagFlag + "offer 받음");
+                        Log.d(WEBRTC_PEER, tagFlag + "offer 받음");
                         CustomPeerConnection customPeerConnection = getCustomPeerConnection(senderId, peerType);
                         if (customPeerConnection == null && Common.VIDEO.equals(peerType)) {
-                            Log.d(TAG, "[peer:" + senderId + "]" + "피어가 없으므로 피어 생성하자");
+                            Log.d(WEBRTC_PEER, "[peer:" + senderId + "]" + "피어가 없으므로 피어 생성하자");
 
                             // 피어 생성 및 answer 작업
                             createPeerAndDoAnswer(senderId, peerType, message.getString("sdp"));
@@ -2591,19 +2657,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     } else if (type.equals("answer")) {
                         String tagFlag = getTagFlagString(senderId, peerType);
 
-                        Log.d(TAG, tagFlag + "answer 받음");
+                        Log.d(WEBRTC_PEER, tagFlag + "answer 받음");
 
                         CustomPeerConnection customPeerConnection = getCustomPeerConnection(senderId, peerType);
 
                         if (customPeerConnection == null) {
-                            Log.d(TAG, tagFlag + "피어가 없어서 answer를 세팅할 수 었습니다.");
+                            Log.d(WEBRTC_PEER, tagFlag + "피어가 없어서 answer를 세팅할 수 었습니다.");
                             return;
                         }
 
                         // 원격 Description 설정
                         customPeerConnection.getPeerConnection().setRemoteDescription(new SimpleSdpObserver(), new SessionDescription(ANSWER, message.getString("sdp")));
 
-                        Log.d(TAG, tagFlag + "answer remote 설정 완료");
+                        Log.d(WEBRTC_PEER, tagFlag + "answer remote 설정 완료");
 
                     /**
                      * [candidate 받음]
@@ -2613,12 +2679,12 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
                         IceCandidate candidate = new IceCandidate(message.getString("id"), message.getInt("label"), message.getString("candidate"));
 
-                        Log.d(TAG, tagFlag + "ICE Candidate 받음");
+                        Log.d(WEBRTC_PEER, tagFlag + "ICE Candidate 받음");
 
                         CustomPeerConnection customPeerConnection = getCustomPeerConnection(senderId, peerType);
 
                         if (customPeerConnection == null) {
-                            Log.d(TAG, tagFlag + "아직 피어가 없으니 candidate를 queue에 넣자");
+                            Log.d(WEBRTC_PEER, tagFlag + "아직 피어가 없으니 candidate를 queue에 넣자");
 
                             CustomQueue customQueue = getCustomQueue(senderId, peerType);
                             if (customQueue == null) {
@@ -2632,7 +2698,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         }
 
                         customPeerConnection.getPeerConnection().addIceCandidate(candidate);
-                        Log.d(TAG, tagFlag + "ICE 피어에 추가 완료!!");
+                        Log.d(WEBRTC_PEER, tagFlag + "ICE 피어에 추가 완료!!");
 
                     /**
                      * [share 받음]
@@ -2686,11 +2752,19 @@ public class MeetingRoomActivity extends AppCompatActivity {
             /**
              * 소켓 연결 요청
              */
-            socket.connect();
+            localSocket.connect();
         } catch (URISyntaxException e) {
             e.printStackTrace();
             Log.e(TAG, e.getMessage());
         }
+    }
+
+    private String createTestClientId(String clientId){
+        clientId = clientId + "@";
+        if(getCustomPeerConnection(clientId, VIDEO) != null){
+            return createTestClientId(clientId);
+        }
+        return clientId;
     }
 
     private void initDrawingView(ColorModel colorModel) {
@@ -3303,7 +3377,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
     //MirtDPM4
     private void doAnswer(CustomPeerConnection customPeerConnection) {
         PeerConnection peerConnection = customPeerConnection.getPeerConnection();
-        String clientId = customPeerConnection.getClientId();
+        String clientId = customPeerConnection.getClientId().replaceAll("@", "");
         String type = customPeerConnection.getType();
 
         String tagFlag = getTagFlagString(customPeerConnection.getClientId(), customPeerConnection.getType());
@@ -3313,11 +3387,11 @@ public class MeetingRoomActivity extends AppCompatActivity {
         peerConnection.createAnswer(new SimpleSdpObserver() {
             @Override
             public void onCreateSuccess(SessionDescription sessionDescription) {
-                Log.d(TAG, finalTagFlag + "answer 생성 완료");
+                Log.d(WEBRTC_PEER, finalTagFlag + "answer 생성 완료");
 
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sessionDescription);
 
-                Log.d(TAG, finalTagFlag + "answer 로컬에 설정 완료");
+                Log.d(WEBRTC_PEER, finalTagFlag + "answer 로컬에 설정 완료");
 
                 JSONObject message = new JSONObject();
                 try {
@@ -3328,8 +3402,8 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     message.put("targetId", targetId);
                     message.put("peerType", type);
 
-                    Log.d(TAG, finalTagFlag + "answer 전송");
-                    sendMessage(message);
+                    Log.d(WEBRTC_PEER, finalTagFlag + "answer 전송");
+                    sendMessage(message, socketId);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -3347,10 +3421,10 @@ public class MeetingRoomActivity extends AppCompatActivity {
         peerConnection.createOffer(new SimpleSdpObserver() {
             @Override
             public void onCreateSuccess(SessionDescription sessionDescription) {
-                Log.d(TAG, tagFlag + "Offer 생성 완료");
+                Log.d(WEBRTC_PEER, tagFlag + "Offer 생성 완료");
 
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sessionDescription);
-                Log.d(TAG, tagFlag + "Offer 로컬 세팅 완료");
+                Log.d(WEBRTC_PEER, tagFlag + "Offer 로컬 세팅 완료");
 
                 JSONObject message = new JSONObject();
 
@@ -3365,7 +3439,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                     message.put("peerType", type);
 
                     sendMessage(message);
-                    Log.d(TAG, tagFlag + "Offer 전송 완료");
+                    Log.d(WEBRTC_PEER, tagFlag + "Offer 전송 완료");
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -3375,6 +3449,17 @@ public class MeetingRoomActivity extends AppCompatActivity {
 
     private void sendMessage(Object message) {
         socket.emit("message", message);
+    }
+    private void sendMessage(Object message, String senderId) {
+        if(socket.id().equals(senderId)){
+            socket.emit("message", message);
+        }else{
+            testSocketList.forEach(socket1 -> {
+                if(socket1.id().equals(senderId)){
+                    socket1.emit("message", message);
+                }
+            });
+        }
     }
 
     private CustomSurfaceViewRenderer windowCustomSurfaceViewRenderer;
@@ -3512,7 +3597,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
         try {
             String tagFlag = getTagFlagString(clientId, type);
 
-            UserModel userModel = getUserModel(clientId);
+            UserModel userModel = getUserModel(clientId.replaceAll("@", ""));
 
             customPeerConnection = new CustomPeerConnection(factory, clientId, type, userModel, new CustomPeerConnection.Observer() {
                 @Override
@@ -3553,7 +3638,7 @@ public class MeetingRoomActivity extends AppCompatActivity {
                         message.put("id", iceCandidate.sdpMid);
                         message.put("candidate", iceCandidate.sdp);
                         message.put("senderId", socketId);
-                        message.put("targetId", clientId);
+                        message.put("targetId", clientId.replaceAll("@", ""));
                         message.put("peerType", type);
 
                         Log.d(TAG, tagFlag + "onIceCandidate: sending candidate " + message);

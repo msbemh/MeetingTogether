@@ -21,6 +21,11 @@ public class MeetingDTO {
     @SerializedName("password")
     private String password;
 
+    @SerializedName("isTest")
+    private boolean isTest;
+    @SerializedName("masterId")
+    private String masterId;
+
     @SerializedName("max_client")
     private int maxClient;
 
@@ -161,5 +166,21 @@ public class MeetingDTO {
 
     public void setReserveContactList(List<Contact> reserveContactList) {
         this.reserveContactList = reserveContactList;
+    }
+
+    public boolean isTest() {
+        return isTest;
+    }
+
+    public void setTest(boolean test) {
+        isTest = test;
+    }
+
+    public String getMasterId() {
+        return masterId;
+    }
+
+    public void setMasterId(String masterId) {
+        this.masterId = masterId;
     }
 }
